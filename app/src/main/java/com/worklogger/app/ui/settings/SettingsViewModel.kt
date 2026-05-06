@@ -3,6 +3,8 @@ package com.worklogger.app.ui.settings
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -12,6 +14,8 @@ import com.worklogger.app.data.repository.WorkRepository
 import com.worklogger.app.model.QuickPhrase
 import com.worklogger.app.model.UserSettings
 import com.worklogger.app.model.WorkRecord
+import com.worklogger.app.utils.DataExporter
+import com.worklogger.app.utils.DataImporter
 import com.worklogger.app.utils.DownloadState
 import com.worklogger.app.utils.ExcelExporter
 import com.worklogger.app.utils.ReleaseInfo
@@ -38,6 +42,11 @@ data class SettingsUiState(
     val cloudUsernameInput: String = "",
     val cloudPasswordInput: String = "",
     val showCloudConfigDialog: Boolean = false,
+    // 导入状态
+    val isImporting: Boolean = false,
+    val importResult: String? = null,
+    val showImportStrategyDialog: Boolean = false,
+    val pendingImportRecords: List<WorkRecord>? = null,
     // 应用更新状态
     val isCheckingUpdate: Boolean = false,
     val updateCheckResult: UpdateCheckResult? = null,
@@ -62,6 +71,10 @@ class SettingsViewModel(
     
     // 云同步服务
     private val cloudSyncService = CloudSyncService()
+    
+    // 数据导入导出工具
+    private val dataExporter = DataExporter(context)
+    private val dataImporter = DataImporter(context)
     
     // 更新检查器和下载器
     private val updateChecker = UpdateChecker()
@@ -199,308 +212,21 @@ class SettingsViewModel(
         }
     }
     
+    fun updateMealSubsidy(subsidy: Double) {
+        viewModelScope.launch {
+            settingsRepository.updateMealSubsidy(subsidy)
+        }
+    }
+    
     fun updateDailyWage(wage: Double) {
         viewModelScope.launch {
             settingsRepository.updateDailyWage(wage)
         }
     }
     
-    fun updateMonthTarget(target: Double) {
+    fun updateMonthlyHoursTarget(target: Double) {
         viewModelScope.launch {
-            settingsRepository.updateMonthTarget(target)
-        }
-    }
-    
-    fun updateMealSubsidyStandard(standard: Double) {
-        viewModelScope.launch {
-            settingsRepository.updateMealSubsidyStandard(standard)
-        }
-    }
-    
-    fun updateOffWorkTime(time: String) {
-        viewModelScope.launch {
-            settingsRepository.updateOffWorkTime(time)
-        }
-    }
-    
-    fun updateOffWorkReminder(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.updateOffWorkReminder(enabled)
-        }
-    }
-    
-    fun updateMissedDayReminder(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.updateMissedDayReminder(enabled)
-        }
-    }
-    
-    fun updateTheme(theme: String) {
-        viewModelScope.launch {
-            settingsRepository.updateTheme(theme)
-        }
-    }
-    
-    fun updateBiometricEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.updateBiometricEnabled(enabled)
-        }
-    }
-    
-    // 云同步配置方法
-    fun showCloudConfigDialog() {
-        val settings = _uiState.value.settings
-        _uiState.update { 
-            it.copy(
-                showCloudConfigDialog = true,
-                cloudServerUrlInput = settings.cloudServerUrl,
-                cloudUsernameInput = settings.cloudUsername,
-                cloudPasswordInput = settings.cloudPassword
-            ) 
-        }
-    }
-    
-    fun hideCloudConfigDialog() {
-        _uiState.update { it.copy(showCloudConfigDialog = false) }
-    }
-    
-    fun updateCloudServerUrl(url: String) {
-        _uiState.update { it.copy(cloudServerUrlInput = url) }
-    }
-    
-    fun updateCloudUsername(username: String) {
-        _uiState.update { it.copy(cloudUsernameInput = username) }
-    }
-    
-    fun updateCloudPassword(password: String) {
-        _uiState.update { it.copy(cloudPasswordInput = password) }
-    }
-    
-    fun saveCloudConfig() {
-        viewModelScope.launch {
-            val url = _uiState.value.cloudServerUrlInput.trim()
-            val username = _uiState.value.cloudUsernameInput.trim()
-            val password = _uiState.value.cloudPasswordInput
-            
-            // 保存配置
-            settingsRepository.updateCloudServerUrl(url)
-            settingsRepository.updateCloudUsername(username)
-            settingsRepository.updateCloudPassword(password)
-            
-            // 测试连接
-            val success = cloudSyncService.testConnection(url, username, password)
-            if (success) {
-                _uiState.update { 
-                    it.copy(
-                        showCloudConfigDialog = false,
-                        syncResult = "连接成功！配置已保存。"
-                    ) 
-                }
-            } else {
-                _uiState.update { 
-                    it.copy(
-                        showCloudConfigDialog = true,
-                        syncResult = "连接失败，请检查服务器地址和账号密码是否正确"
-                    ) 
-                }
-            }
-        }
-    }
-    
-    fun toggleCloudSync(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.updateCloudSyncEnabled(enabled)
-        }
-    }
-    
-    fun syncToCloud() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSyncing = true) }
-            
-            val settings = _uiState.value.settings
-            if (settings.cloudServerUrl.isBlank() || settings.cloudUsername.isBlank()) {
-                _uiState.update { 
-                    it.copy(isSyncing = false, syncResult = "请先配置云服务器信息") 
-                }
-                return@launch
-            }
-            
-            // 获取本地所有记录
-            val localRecords = workRepository.getAllRecordsSync()
-            
-            // 执行同步
-            val result = cloudSyncService.syncData(
-                serverUrl = settings.cloudServerUrl,
-                username = settings.cloudUsername,
-                password = settings.cloudPassword,
-                localRecords = localRecords
-            )
-            
-            if (result.success) {
-                // 更新最后同步时间
-                settingsRepository.updateCloudLastSyncTime(System.currentTimeMillis())
-                
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-                val syncTime = dateFormat.format(Date())
-                
-                _uiState.update { 
-                    it.copy(
-                        isSyncing = false,
-                        syncResult = "同步成功！\n上传: ${result.uploadedCount}条\n下载: ${result.downloadedCount}条\n同步时间: $syncTime"
-                    ) 
-                }
-            } else {
-                _uiState.update { 
-                    it.copy(isSyncing = false, syncResult = "同步失败: ${result.message}") 
-                }
-            }
-        }
-    }
-    
-    fun clearSyncResult() {
-        _uiState.update { it.copy(syncResult = null) }
-    }
-    
-    /**
-     * 从云端下载数据
-     */
-    fun downloadFromCloud() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSyncing = true) }
-            
-            val settings = _uiState.value.settings
-            if (settings.cloudServerUrl.isBlank() || settings.cloudUsername.isBlank()) {
-                _uiState.update { 
-                    it.copy(isSyncing = false, syncResult = "请先配置云服务器信息") 
-                }
-                return@launch
-            }
-            
-            // 获取本地所有记录
-            val localRecords = workRepository.getAllRecordsSync()
-            
-            // 从云端下载数据
-            val result = cloudSyncService.downloadData(
-                serverUrl = settings.cloudServerUrl,
-                username = settings.cloudUsername,
-                password = settings.cloudPassword,
-                localRecords = localRecords
-            )
-            
-            result.fold(
-                onSuccess = { cloudRecords ->
-                    if (cloudRecords.isEmpty()) {
-                        _uiState.update { 
-                            it.copy(
-                                isSyncing = false,
-                                syncResult = "云端没有新数据需要下载"
-                            ) 
-                        }
-                    } else {
-                        // 将云端记录转换为本地记录并插入
-                        val recordsToInsert = cloudRecords.map { cloudSyncService.cloudRecordToWorkRecord(it) }
-                        workRepository.insertAllRecords(recordsToInsert)
-                        
-                        // 更新最后同步时间
-                        settingsRepository.updateCloudLastSyncTime(System.currentTimeMillis())
-                        
-                        _uiState.update { 
-                            it.copy(
-                                isSyncing = false,
-                                syncResult = "下载成功！已导入 ${recordsToInsert.size} 条记录"
-                            ) 
-                        }
-                    }
-                },
-                onFailure = { error ->
-                    _uiState.update { 
-                        it.copy(isSyncing = false, syncResult = "下载失败: ${error.message}") 
-                    }
-                }
-            )
-        }
-    }
-    
-    fun addPhrase(phrase: String) {
-        viewModelScope.launch {
-            if (phrase.isNotBlank()) {
-                workRepository.insertPhrase(QuickPhrase(phrase = phrase.trim()))
-            }
-        }
-    }
-    
-    fun deletePhrase(id: Int) {
-        viewModelScope.launch {
-            workRepository.deletePhrase(id)
-        }
-    }
-    
-    fun incrementPhraseUseCount(id: Int) {
-        viewModelScope.launch {
-            workRepository.incrementPhraseUseCount(id)
-        }
-    }
-    
-    fun exportExcel() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isExporting = true) }
-            
-            val records = workRepository.getAllRecordsSync()
-            val exporter = ExcelExporter(context)
-            val result = exporter.exportToExcel(records)
-            
-            result.fold(
-                onSuccess = { file ->
-                    val intent = exporter.getShareIntent(file)
-                    val chooser = Intent.createChooser(intent, "分享Excel文件")
-                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(chooser)
-                    _uiState.update { it.copy(isExporting = false, exportResult = "导出成功") }
-                },
-                onFailure = { e ->
-                    _uiState.update { it.copy(isExporting = false, exportResult = "导出失败: ${e.message}") }
-                }
-            )
-        }
-    }
-    
-    fun exportJson() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isExporting = true) }
-            
-            val records = workRepository.getAllRecordsSync()
-            val exporter = ExcelExporter(context)
-            val result = exporter.exportToJson(records)
-            
-            result.fold(
-                onSuccess = { file ->
-                    val intent = exporter.getShareIntent(file)
-                    val chooser = Intent.createChooser(intent, "分享JSON文件")
-                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(chooser)
-                    _uiState.update { it.copy(isExporting = false, exportResult = "导出成功") }
-                },
-                onFailure = { e ->
-                    _uiState.update { it.copy(isExporting = false, exportResult = "导出失败: ${e.message}") }
-                }
-            )
-        }
-    }
-    
-    fun importFromExcel(file: File) {
-        viewModelScope.launch {
-            val exporter = ExcelExporter(context)
-            val result = exporter.importFromExcel(file)
-            
-            result.fold(
-                onSuccess = { records ->
-                    workRepository.insertAllRecords(records)
-                    _uiState.update { it.copy(showImportDialog = false, exportResult = "导入成功: ${records.size}条记录") }
-                },
-                onFailure = { e ->
-                    _uiState.update { it.copy(showImportDialog = false, exportResult = "导入失败: ${e.message}") }
-                }
-            )
+            settingsRepository.updateMonthlyHoursTarget(target)
         }
     }
     
@@ -514,15 +240,443 @@ class SettingsViewModel(
     
     fun clearAllData() {
         viewModelScope.launch {
-            workRepository.clearAllRecords()
-            workRepository.clearAllPhrases()
-            settingsRepository.clearAllSettings()
-            _uiState.update { it.copy(showClearConfirm = false, exportResult = "数据已清空") }
+            workRepository.deleteAllRecords()
+            hideClearConfirm()
         }
     }
     
+    // ==================== 云同步相关 ====================
+    
+    /**
+     * 显示云配置对话框
+     */
+    fun showCloudConfigDialog() {
+        _uiState.update { it.copy(showCloudConfigDialog = true) }
+    }
+    
+    /**
+     * 隐藏云配置对话框
+     */
+    fun hideCloudConfigDialog() {
+        _uiState.update { it.copy(showCloudConfigDialog = false) }
+    }
+    
+    /**
+     * 更新云服务器URL输入
+     */
+    fun updateCloudServerUrl(url: String) {
+        _uiState.update { it.copy(cloudServerUrlInput = url) }
+    }
+    
+    /**
+     * 更新云用户名输入
+     */
+    fun updateCloudUsername(username: String) {
+        _uiState.update { it.copy(cloudUsernameInput = username) }
+    }
+    
+    /**
+     * 更新云密码输入
+     */
+    fun updateCloudPassword(password: String) {
+        _uiState.update { it.copy(cloudPasswordInput = password) }
+    }
+    
+    /**
+     * 保存云同步配置
+     */
+    fun saveCloudConfig() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            settingsRepository.updateCloudServerUrl(state.cloudServerUrlInput)
+            settingsRepository.updateCloudUsername(state.cloudUsernameInput)
+            settingsRepository.updateCloudPassword(state.cloudPasswordInput)
+            hideCloudConfigDialog()
+        }
+    }
+    
+    /**
+     * 测试云服务器连接
+     */
+    fun testCloudConnection() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val serverUrl = state.cloudServerUrlInput
+            
+            if (serverUrl.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请输入服务器地址") }
+                return@launch
+            }
+            
+            _uiState.update { it.copy(syncResult = "正在测试连接...") }
+            
+            val success = cloudSyncService.testConnection(serverUrl)
+            
+            _uiState.update { 
+                it.copy(
+                    syncResult = if (success) "连接成功！" else "连接失败，请检查服务器地址"
+                ) 
+            }
+        }
+    }
+    
+    /**
+     * 同步云端数据
+     * 上传本地数据，下载云端数据
+     */
+    fun syncCloudData() {
+        viewModelScope.launch {
+            val settings = _uiState.value.settings
+            val serverUrl = settings.cloudServerUrl
+            val username = settings.cloudUsername
+            val password = settings.cloudPassword
+            
+            if (serverUrl.isBlank() || username.isBlank() || password.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请先配置云同步参数") }
+                return@launch
+            }
+            
+            _uiState.update { it.copy(isSyncing = true, syncResult = "正在同步...") }
+            
+            // 获取本地所有记录
+            val localRecords = workRepository.allRecords.first()
+            
+            // 执行同步
+            val result = cloudSyncService.syncData(serverUrl, username, password, localRecords)
+            
+            if (result.success) {
+                // 下载云端数据到本地
+                val downloadResult = cloudSyncService.downloadData(serverUrl, username, password, localRecords)
+                
+                if (downloadResult.isSuccess) {
+                    val cloudRecords = downloadResult.getOrNull() ?: emptyList()
+                    
+                    // 插入下载的记录
+                    var downloadedCount = 0
+                    for (record in cloudRecords) {
+                        workRepository.insertIfNotExists(record)
+                        downloadedCount++
+                    }
+                    
+                    _uiState.update { 
+                        it.copy(
+                            isSyncing = false,
+                            syncResult = "同步完成：上传${result.uploadedCount}条，下载${downloadedCount}条"
+                        ) 
+                    }
+                } else {
+                    _uiState.update { 
+                        it.copy(
+                            isSyncing = false,
+                            syncResult = "同步完成，上传${result.uploadedCount}条，下载失败"
+                        ) 
+                    }
+                }
+            } else {
+                _uiState.update { 
+                    it.copy(
+                        isSyncing = false,
+                        syncResult = "同步失败：${result.message}"
+                    ) 
+                }
+            }
+        }
+    }
+    
+    /**
+     * 从云端下载数据
+     */
+    fun downloadFromCloud() {
+        viewModelScope.launch {
+            val settings = _uiState.value.settings
+            val serverUrl = settings.cloudServerUrl
+            val username = settings.cloudUsername
+            val password = settings.cloudPassword
+            
+            if (serverUrl.isBlank() || username.isBlank() || password.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请先配置云同步参数") }
+                return@launch
+            }
+            
+            _uiState.update { it.copy(isSyncing = true, syncResult = "正在下载...") }
+            
+            // 获取本地所有记录
+            val localRecords = workRepository.allRecords.first()
+            
+            // 下载云端数据
+            val result = cloudSyncService.downloadData(serverUrl, username, password, localRecords)
+            
+            if (result.isSuccess) {
+                val cloudRecords = result.getOrNull() ?: emptyList()
+                
+                // 插入下载的记录
+                var downloadedCount = 0
+                for (record in cloudRecords) {
+                    workRepository.insertIfNotExists(record)
+                    downloadedCount++
+                }
+                
+                _uiState.update { 
+                    it.copy(
+                        isSyncing = false,
+                        syncResult = "下载完成：${downloadedCount}条"
+                    ) 
+                }
+            } else {
+                _uiState.update { 
+                    it.copy(
+                        isSyncing = false,
+                        syncResult = "下载失败：${result.exceptionOrNull()?.message}"
+                    ) 
+                }
+            }
+        }
+    }
+    
+    /**
+     * 上传数据到云端
+     */
+    fun uploadToCloud() {
+        viewModelScope.launch {
+            val settings = _uiState.value.settings
+            val serverUrl = settings.cloudServerUrl
+            val username = settings.cloudUsername
+            val password = settings.cloudPassword
+            
+            if (serverUrl.isBlank() || username.isBlank() || password.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请先配置云同步参数") }
+                return@launch
+            }
+            
+            _uiState.update { it.copy(isSyncing = true, syncResult = "正在上传...") }
+            
+            // 获取本地所有记录
+            val localRecords = workRepository.allRecords.first()
+            
+            // 上传数据
+            val result = cloudSyncService.uploadRecords(serverUrl, username, password, localRecords)
+            
+            if (result.isSuccess) {
+                _uiState.update { 
+                    it.copy(
+                        isSyncing = false,
+                        syncResult = "上传完成：${result.getOrNull()}条"
+                    ) 
+                }
+            } else {
+                _uiState.update { 
+                    it.copy(
+                        isSyncing = false,
+                        syncResult = "上传失败：${result.exceptionOrNull()?.message}"
+                    ) 
+                }
+            }
+        }
+    }
+    
+    /**
+     * 清除同步结果
+     */
+    fun clearSyncResult() {
+        _uiState.update { it.copy(syncResult = null) }
+    }
+    
+    // ==================== 数据导入导出相关 ====================
+    
+    /**
+     * 导出数据到指定URI
+     * 
+     * @param uri 文件保存的URI
+     */
+    fun exportData(uri: Uri) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isExporting = true, exportResult = null) }
+            
+            try {
+                val settings = _uiState.value.settings
+                val records = workRepository.allRecords.first()
+                
+                // 构建设置Map
+                val settingsMap = mapOf(
+                    "daily_hours" to settings.dailyWorkHours,
+                    "overtime_rate" to settings.overtimeRate,
+                    "meal_subsidy" to settings.mealSubsidy,
+                    "daily_wage" to settings.dailyWage,
+                    "monthly_hours_target" to settings.monthlyHoursTarget
+                )
+                
+                val result = dataExporter.exportToUri(records, uri, settingsMap)
+                
+                when (result) {
+                    is DataExporter.ExportResult.Success -> {
+                        _uiState.update { 
+                            it.copy(
+                                isExporting = false,
+                                exportResult = "导出成功！共${result.recordCount}条记录"
+                            ) 
+                        }
+                    }
+                    is DataExporter.ExportResult.Error -> {
+                        _uiState.update { 
+                            it.copy(
+                                isExporting = false,
+                                exportResult = "导出失败：${result.message}"
+                            ) 
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update { 
+                    it.copy(
+                        isExporting = false,
+                        exportResult = "导出失败：${e.message}"
+                    ) 
+                }
+            }
+        }
+    }
+    
+    /**
+     * 生成导出文件名
+     */
+    fun getExportFileName(): String {
+        return dataExporter.generateFileName()
+    }
+    
+    /**
+     * 准备导入数据（从URI读取并解析）
+     * 
+     * @param uri 文件的URI
+     */
+    fun prepareImport(uri: Uri) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isImporting = true, importResult = null) }
+            
+            try {
+                val existingRecords = workRepository.allRecords.first()
+                
+                val result = dataImporter.importFromUri(uri, existingRecords)
+                
+                when (result) {
+                    is DataImporter.ImportResult.Success -> {
+                        if (result.importedCount == 0) {
+                            _uiState.update { 
+                                it.copy(
+                                    isImporting = false,
+                                    importResult = "没有需要导入的记录（可能已全部存在）"
+                                ) 
+                            }
+                        } else {
+                            // 显示策略选择对话框
+                            _uiState.update { 
+                                it.copy(
+                                    isImporting = false,
+                                    showImportStrategyDialog = true,
+                                    pendingImportRecords = result.records
+                                ) 
+                            }
+                        }
+                    }
+                    is DataImporter.ImportResult.Error -> {
+                        _uiState.update { 
+                            it.copy(
+                                isImporting = false,
+                                importResult = "导入失败：${result.message}"
+                            ) 
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update { 
+                    it.copy(
+                        isImporting = false,
+                        importResult = "导入失败：${e.message}"
+                    ) 
+                }
+            }
+        }
+    }
+    
+    /**
+     * 确认导入数据
+     * 
+     * @param conflictStrategy 冲突处理策略
+     */
+    fun confirmImport() {
+        viewModelScope.launch {
+            val records = _uiState.value.pendingImportRecords ?: return@launch
+            
+            try {
+                var importedCount = 0
+                for (record in records) {
+                    workRepository.insertIfNotExists(record)
+                    importedCount++
+                }
+                
+                _uiState.update { 
+                    it.copy(
+                        showImportStrategyDialog = false,
+                        pendingImportRecords = null,
+                        importResult = "导入成功！共${importedCount}条记录"
+                    ) 
+                }
+            } catch (e: Exception) {
+                _uiState.update { 
+                    it.copy(
+                        showImportStrategyDialog = false,
+                        pendingImportRecords = null,
+                        importResult = "导入失败：${e.message}"
+                    ) 
+                }
+            }
+        }
+    }
+    
+    /**
+     * 取消导入
+     */
+    fun cancelImport() {
+        _uiState.update { 
+            it.copy(
+                showImportStrategyDialog = false,
+                pendingImportRecords = null
+            ) 
+        }
+    }
+    
+    /**
+     * 清除导入结果
+     */
+    fun clearImportResult() {
+        _uiState.update { it.copy(importResult = null) }
+    }
+    
+    /**
+     * 清除导出结果
+     */
     fun clearExportResult() {
         _uiState.update { it.copy(exportResult = null) }
+    }
+    
+    // ==================== 快捷短语相关 ====================
+    
+    fun addPhrase(text: String) {
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            workRepository.addPhrase(QuickPhrase(text = text))
+        }
+    }
+    
+    fun deletePhrase(phrase: QuickPhrase) {
+        viewModelScope.launch {
+            workRepository.deletePhrase(phrase)
+        }
+    }
+    
+    fun updatePhrase(phrase: QuickPhrase, newText: String) {
+        viewModelScope.launch {
+            workRepository.updatePhrase(phrase.copy(text = newText))
+        }
     }
 }
 
@@ -531,9 +685,9 @@ class SettingsViewModelFactory(
     private val workRepository: WorkRepository,
     private val settingsRepository: SettingsRepository
 ) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
             return SettingsViewModel(context, workRepository, settingsRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
