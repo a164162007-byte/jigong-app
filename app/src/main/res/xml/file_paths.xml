@@ -2,4 +2,6 @@
 <paths>
     <external-files-path name="exports" path="exports/" />
     <cache-path name="cache" path="/" />
+    <!-- APK更新下载目录 -->
+    <cache-path name="apk" path="." />
 </paths>
