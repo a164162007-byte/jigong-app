@@ -749,6 +749,7 @@ fun NumberSettingItem(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun ThemeSelector(
     selectedTheme: String,
     onThemeChange: (String) -> Unit
