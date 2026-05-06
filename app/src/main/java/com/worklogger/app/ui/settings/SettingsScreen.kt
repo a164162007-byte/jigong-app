@@ -285,7 +285,7 @@ fun SettingsScreen(
                                 )
                             } else {
                                 Icon(
-                                    imageVector = Icons.Outlined.Sync,
+                                    imageVector = Icons.Outlined.CloudUpload,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary
                                 )
@@ -296,6 +296,40 @@ fun SettingsScreen(
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
+                        }
+                    }
+                }
+                
+                // 下载按钮
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !uiState.isSyncing) { viewModel.downloadFromCloud() },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (uiState.isSyncing) 
+                                MaterialTheme.colorScheme.surfaceVariant 
+                            else MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.CloudDownload,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "从云端下载",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
                         }
                     }
                 }
