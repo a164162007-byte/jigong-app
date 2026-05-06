@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.worklogger.app.BuildConfig
 import com.worklogger.app.ui.components.ConfirmDialog
+import com.worklogger.app.utils.DownloadState
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -366,6 +368,56 @@ fun SettingsScreen(
             }
             
             item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !uiState.isCheckingUpdate) { viewModel.checkForUpdate() },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (uiState.isCheckingUpdate)
+                            MaterialTheme.colorScheme.surfaceVariant
+                        else MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.SystemUpdate,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "检查更新",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = if (uiState.isCheckingUpdate) "检查中..." else "点击检查新版本",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (uiState.isCheckingUpdate) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+            
+            item {
                 Spacer(modifier = Modifier.height(80.dp))
             }
         }
@@ -409,6 +461,35 @@ fun SettingsScreen(
                 onDismiss = { viewModel.hideCloudConfigDialog() },
                 onSave = { viewModel.saveCloudConfig() }
             )
+        }
+        
+        // 更新对话框
+        uiState.updateCheckResult?.let { result ->
+            when (result) {
+                is UpdateCheckResult.UpdateAvailable -> {
+                    UpdateDialog(
+                        releaseInfo = result.info,
+                        downloadState = uiState.downloadState,
+                        onDismiss = { viewModel.clearUpdateCheckResult() },
+                        onUpdate = {
+                            val activity = LocalContext.current as? android.app.Activity
+                            activity?.let { viewModel.downloadAndInstallUpdate(it) }
+                        }
+                    )
+                }
+                is UpdateCheckResult.NoUpdate -> {
+                    LaunchedEffect(Unit) {
+                        snackbarHostState.showSnackbar("当前已是最新版本")
+                        viewModel.clearUpdateCheckResult()
+                    }
+                }
+                is UpdateCheckResult.Error -> {
+                    LaunchedEffect(Unit) {
+                        snackbarHostState.showSnackbar(result.message)
+                        viewModel.clearUpdateCheckResult()
+                    }
+                }
+            }
         }
     }
 }
@@ -824,6 +905,250 @@ fun TimePickerDialog(
                     }
                     TextButton(onClick = { onConfirm(timePickerState.hour, timePickerState.minute) }) {
                         Text("确认")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 应用更新对话框
+ */
+@Composable
+fun UpdateDialog(
+    releaseInfo: ReleaseInfo,
+    downloadState: DownloadState,
+    onDismiss: () -> Unit,
+    onUpdate: () -> Unit
+) {
+    Dialog(onDismissRequest = {
+        if (downloadState !is DownloadState.Downloading) {
+            onDismiss()
+        }
+    }) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp)
+            ) {
+                // 标题
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.SystemUpdate,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "发现新版本",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 版本信息
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "新版本",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = "v${releaseInfo.versionName}",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "当前版本",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = BuildConfig.VERSION_NAME,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 更新说明
+                Text(
+                    text = "更新内容",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Text(
+                        text = releaseInfo.releaseNotes.ifEmpty { "暂无更新说明" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(12.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 下载进度
+                when (downloadState) {
+                    is DownloadState.Downloading -> {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "下载中...",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Text(
+                                        text = "${downloadState.progress}%",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LinearProgressIndicator(
+                                    progress = { downloadState.progress / 100f },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    }
+                    is DownloadState.Error -> {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Text(
+                                text = "下载失败: ${downloadState.message}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    }
+                    is DownloadState.Completed -> {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "下载完成，正在启动安装程序...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+                    else -> {}
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // 按钮
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        enabled = downloadState !is DownloadState.Downloading
+                    ) {
+                        Text("稍后再说")
+                    }
+                    
+                    val isDownloading = downloadState is DownloadState.Downloading
+                    val isCompleted = downloadState is DownloadState.Completed
+                    
+                    Button(
+                        onClick = onUpdate,
+                        modifier = Modifier.weight(1f),
+                        enabled = !isDownloading && !isCompleted
+                    ) {
+                        when {
+                            isDownloading -> {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("下载中")
+                            }
+                            isCompleted -> {
+                                Text("安装中...")
+                            }
+                            else -> {
+                                Icon(
+                                    imageVector = Icons.Outlined.Download,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("更新")
+                            }
+                        }
                     }
                 }
             }
