@@ -22,6 +22,7 @@ import com.worklogger.app.BuildConfig
 import com.worklogger.app.ui.components.ConfirmDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
@@ -268,6 +269,7 @@ fun SettingsScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsSection(title: String) {
     Text(
@@ -279,6 +281,7 @@ fun SettingsSection(title: String) {
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingItem(
     title: String,
@@ -342,6 +345,7 @@ fun SettingItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SwitchSettingItem(
     title: String,
@@ -382,6 +386,7 @@ fun SwitchSettingItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClickableSettingItem(
     title: String,
@@ -416,6 +421,7 @@ fun ClickableSettingItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NumberSettingItem(
     title: String,
@@ -458,6 +464,8 @@ fun NumberSettingItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThemeSelector(
     selectedTheme: String,
@@ -495,6 +503,7 @@ fun ThemeSelector(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimePickerDialog(
@@ -539,3 +548,4 @@ fun TimePickerDialog(
         }
     }
 }
+
