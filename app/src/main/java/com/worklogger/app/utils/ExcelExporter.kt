@@ -8,9 +8,12 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.worklogger.app.model.WorkRecord
 import org.apache.poi.ss.usermodel.*
+import org.apache.poi.ss.usermodel.WorkbookFactory
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import java.io.File
-import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.File
+import java.io.FileOutputStreamInputStream
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -123,7 +126,7 @@ class ExcelExporter(private val context: Context) {
             val records = mutableListOf<WorkRecord>()
             
             FileInputStream(file).use { fis ->
-                Workbook.create(fis).use { workbook ->
+                WorkbookFactory.create(fis).use { workbook ->
                     val sheet = workbook.getSheetAt(0)
                     
                     // 跳过表头
