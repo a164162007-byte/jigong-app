@@ -22,7 +22,6 @@ import com.worklogger.app.BuildConfig
 import com.worklogger.app.ui.components.ConfirmDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
@@ -465,7 +464,6 @@ fun NumberSettingItem(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThemeSelector(
     selectedTheme: String,
@@ -503,7 +501,6 @@ fun ThemeSelector(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimePickerDialog(
