@@ -37,5 +37,21 @@ class SettingsRepository(private val settingsDataStore: SettingsDataStore) {
     suspend fun updateBiometricEnabled(enabled: Boolean) = 
         settingsDataStore.updateBiometricEnabled(enabled)
     
+    // 云同步配置方法
+    suspend fun updateCloudSyncEnabled(enabled: Boolean) = 
+        settingsDataStore.updateCloudSyncEnabled(enabled)
+    
+    suspend fun updateCloudServerUrl(url: String) = 
+        settingsDataStore.updateCloudServerUrl(url)
+    
+    suspend fun updateCloudUsername(username: String) = 
+        settingsDataStore.updateCloudUsername(username)
+    
+    suspend fun updateCloudPassword(password: String) = 
+        settingsDataStore.updateCloudPassword(password)
+    
+    suspend fun updateCloudLastSyncTime(time: Long) = 
+        settingsDataStore.updateCloudLastSyncTime(time)
+    
     suspend fun clearAllSettings() = settingsDataStore.clearAll()
 }
