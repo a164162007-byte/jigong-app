@@ -1,5 +1,10 @@
 package com.worklogger.app.ui.settings
 
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,489 +13,252 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import android.app.Activity
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import com.worklogger.app.BuildConfig
-import com.worklogger.app.ui.components.ConfirmDialog
-import com.worklogger.app.utils.DownloadState
-import com.worklogger.app.utils.ReleaseInfo
-import java.text.SimpleDateFormat
-import java.util.*
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.worklogger.app.data.repository.SettingsRepository
+import com.worklogger.app.data.repository.WorkRepository
+import com.worklogger.app.model.QuickPhrase
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    viewModel: SettingsViewModel,
-    onNavigateToTrash: () -> Unit,
-    onNavigateToPhrases: () -> Unit
+    workRepository: WorkRepository,
+    settingsRepository: SettingsRepository,
+    onExportExcel: () -> Unit
 ) {
+    val context = LocalContext.current
+    val viewModel: SettingsViewModel = viewModel(
+        factory = SettingsViewModelFactory(context, workRepository, settingsRepository)
+    )
+    
     val uiState by viewModel.uiState.collectAsState()
-    var showTimePicker by remember { mutableStateOf(false) }
     
-    val snackbarHostState = remember { SnackbarHostState() }
-    
-    LaunchedEffect(uiState.exportResult) {
-        uiState.exportResult?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearExportResult()
-        }
+    // 文件选择器 - 导出
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let { viewModel.exportData(it) }
     }
     
-    LaunchedEffect(uiState.syncResult) {
-        uiState.syncResult?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearSyncResult()
-        }
+    // 文件选择器 - 导入
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.prepareImport(it) }
     }
     
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        text = "设置",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+                title = { Text("设置") },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        }
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
         ) {
-            // 工时规则
-            item {
-                SettingsSection(title = "工时规则")
-            }
-            
-            item {
+            // 工作设置区域
+            SettingsSection(title = "工作设置") {
                 NumberSettingItem(
                     title = "每日标准工时",
+                    subtitle = "用于计算加班和进度",
                     value = uiState.settings.dailyWorkHours,
-                    suffix = "小时",
-                    onValueChange = { viewModel.updateDailyWorkHours(it) }
+                    onValueChange = { viewModel.updateDailyWorkHours(it) },
+                    suffix = "小时"
                 )
-            }
-            
-            item {
+                
                 NumberSettingItem(
-                    title = "加班折算比例",
+                    title = "加班折算率",
+                    subtitle = "加班小时 × 折算率 = 标准工时",
                     value = uiState.settings.overtimeRate,
-                    suffix = "（1小时加班= ? 标准工时）",
-                    onValueChange = { viewModel.updateOvertimeRate(it) }
+                    onValueChange = { viewModel.updateOvertimeRate(it) },
+                    suffix = "倍"
                 )
-            }
-            
-            // 工资设置
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsSection(title = "工资设置")
-            }
-            
-            item {
+                
+                NumberSettingItem(
+                    title = "饭补金额",
+                    subtitle = "标准工天 × 饭补 = 饭补总额",
+                    value = uiState.settings.mealSubsidy,
+                    onValueChange = { viewModel.updateMealSubsidy(it) },
+                    prefix = "¥ ",
+                    suffix = "元/天"
+                )
+                
                 NumberSettingItem(
                     title = "日工资标准",
+                    subtitle = "用于工资计算",
                     value = uiState.settings.dailyWage,
-                    prefix = "¥",
-                    suffix = "元",
-                    onValueChange = { viewModel.updateDailyWage(it) }
+                    onValueChange = { viewModel.updateDailyWage(it) },
+                    prefix = "¥ ",
+                    suffix = "元/天"
                 )
-            }
-            
-            item {
+                
                 NumberSettingItem(
                     title = "月工时目标",
-                    value = uiState.settings.monthTarget,
-                    suffix = "天",
-                    onValueChange = { viewModel.updateMonthTarget(it) }
+                    subtitle = "本月要达到的工时",
+                    value = uiState.settings.monthlyHoursTarget,
+                    onValueChange = { viewModel.updateMonthlyHoursTarget(it) },
+                    suffix = "小时"
                 )
             }
             
-            item {
-                NumberSettingItem(
-                    title = "饭补标准",
-                    value = uiState.settings.mealSubsidyStandard,
-                    prefix = "¥",
-                    suffix = "元/天",
-                    onValueChange = { viewModel.updateMealSubsidyStandard(it) }
+            HorizontalDivider()
+            
+            // 数据管理区域
+            SettingsSection(title = "数据管理") {
+                // 导出数据
+                SettingsClickableItem(
+                    icon = Icons.Default.Upload,
+                    title = "导出数据",
+                    subtitle = "导出为JSON文件（与Web端兼容）",
+                    onClick = {
+                        val fileName = viewModel.getExportFileName()
+                        exportLauncher.launch(fileName)
+                    },
+                    enabled = !uiState.isExporting
                 )
-            }
-            
-            // 提醒设置
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsSection(title = "提醒设置")
-            }
-            
-            item {
-                SwitchSettingItem(
-                    title = "下班提醒",
-                    subtitle = "下班时间提醒记工",
-                    checked = uiState.settings.offWorkReminder,
-                    onCheckedChange = { viewModel.updateOffWorkReminder(it) }
-                )
-            }
-            
-            item {
-                ClickableSettingItem(
-                    title = "下班时间",
-                    value = uiState.settings.offWorkTime,
-                    onClick = { showTimePicker = true }
-                )
-            }
-            
-            item {
-                SwitchSettingItem(
-                    title = "漏记提醒",
-                    subtitle = "晚上8点提醒补记",
-                    checked = uiState.settings.missedDayReminder,
-                    onCheckedChange = { viewModel.updateMissedDayReminder(it) }
-                )
-            }
-            
-            // 主题设置
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsSection(title = "主题")
-            }
-            
-            item {
-                ThemeSelector(
-                    selectedTheme = uiState.settings.theme,
-                    onThemeChange = { viewModel.updateTheme(it) }
-                )
-            }
-            
-            // 云同步设置
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsSection(title = "云同步 (Docker)")
-            }
-            
-            // 云同步开关
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.CloudSync,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "启用云同步",
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                                Text(
-                                    text = "与群晖NAS上的Web版同步数据",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Switch(
-                                checked = uiState.settings.cloudSyncEnabled,
-                                onCheckedChange = { viewModel.toggleCloudSync(it) }
-                            )
-                        }
-                    }
-                }
-            }
-            
-            // 云同步状态和操作
-            if (uiState.settings.cloudSyncEnabled) {
-                // 服务器配置按钮
-                item {
-                    SettingItem(
-                        title = "服务器配置",
-                        subtitle = if (uiState.settings.cloudServerUrl.isNotEmpty()) 
-                            uiState.settings.cloudServerUrl else "点击配置服务器信息",
-                        icon = Icons.Outlined.Dns,
-                        onClick = { viewModel.showCloudConfigDialog() }
-                    )
-                }
                 
-                // 最后同步时间
-                if (uiState.settings.cloudLastSyncTime > 0) {
-                    item {
-                        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-                        val syncTime = dateFormat.format(Date(uiState.settings.cloudLastSyncTime))
-                        SettingItem(
-                            title = "上次同步",
-                            value = syncTime,
-                            icon = Icons.Outlined.Schedule
-                        )
-                    }
-                }
-                
-                // 同步按钮
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = !uiState.isSyncing) { viewModel.syncToCloud() },
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (uiState.isSyncing) 
-                                MaterialTheme.colorScheme.surfaceVariant 
-                            else MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (uiState.isSyncing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = "同步中...",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Outlined.CloudUpload,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = "同步到云端",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                }
-                
-                // 下载按钮
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = !uiState.isSyncing) { viewModel.downloadFromCloud() },
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (uiState.isSyncing) 
-                                MaterialTheme.colorScheme.surfaceVariant 
-                            else MaterialTheme.colorScheme.secondaryContainer
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.CloudDownload,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "从云端下载",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                        }
-                    }
-                }
-            }
-            
-            // 快捷短语
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsSection(title = "快捷短语")
-            }
-            
-            item {
-                SettingItem(
-                    title = "管理快捷短语",
-                    subtitle = "${uiState.phrases.size} 个短语",
-                    icon = Icons.Outlined.ShortText,
-                    onClick = onNavigateToPhrases
+                // 导入数据
+                SettingsClickableItem(
+                    icon = Icons.Default.Download,
+                    title = "导入数据",
+                    subtitle = "从JSON文件导入（支持Web端格式）",
+                    onClick = {
+                        importLauncher.launch(arrayOf("application/json"))
+                    },
+                    enabled = !uiState.isImporting
                 )
-            }
-            
-            // 数据管理
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsSection(title = "数据管理")
-            }
-            
-            item {
-                SettingItem(
+                
+                // Excel导出
+                SettingsClickableItem(
+                    icon = Icons.Default.TableChart,
                     title = "导出Excel",
-                    icon = Icons.Outlined.TableChart,
-                    onClick = { viewModel.exportExcel() }
+                    subtitle = "导出为Excel表格",
+                    onClick = onExportExcel
                 )
             }
             
-            item {
-                SettingItem(
-                    title = "导出JSON",
-                    icon = Icons.Outlined.Code,
-                    onClick = { viewModel.exportJson() }
+            HorizontalDivider()
+            
+            // 云同步区域
+            SettingsSection(title = "云同步") {
+                // 云配置
+                SettingsClickableItem(
+                    icon = Icons.Default.Cloud,
+                    title = "云同步设置",
+                    subtitle = if (uiState.settings.cloudServerUrl.isNotBlank())
+                        "已配置: ${uiState.settings.cloudServerUrl}"
+                    else "点击配置云同步",
+                    onClick = { viewModel.showCloudConfigDialog() }
+                )
+                
+                // 测试连接
+                SettingsClickableItem(
+                    icon = Icons.Default.Wifi,
+                    title = "测试连接",
+                    subtitle = "测试与云服务器的连接",
+                    onClick = { viewModel.testCloudConnection() },
+                    enabled = !uiState.isSyncing && uiState.settings.cloudServerUrl.isNotBlank()
+                )
+                
+                // 同步数据
+                SettingsClickableItem(
+                    icon = Icons.Default.Sync,
+                    title = "同步数据",
+                    subtitle = "上传本地 + 下载云端",
+                    onClick = { viewModel.syncCloudData() },
+                    enabled = !uiState.isSyncing && uiState.settings.cloudServerUrl.isNotBlank()
+                )
+                
+                // 从云端下载
+                SettingsClickableItem(
+                    icon = Icons.Default.CloudDownload,
+                    title = "从云端下载",
+                    subtitle = "仅下载云端数据到本地",
+                    onClick = { viewModel.downloadFromCloud() },
+                    enabled = !uiState.isSyncing && uiState.settings.cloudServerUrl.isNotBlank()
+                )
+                
+                // 上传到云端
+                SettingsClickableItem(
+                    icon = Icons.Default.CloudUpload,
+                    title = "上传到云端",
+                    subtitle = "仅上传本地数据到云端",
+                    onClick = { viewModel.uploadToCloud() },
+                    enabled = !uiState.isSyncing && uiState.settings.cloudServerUrl.isNotBlank()
                 )
             }
             
-            item {
-                SettingItem(
-                    title = "回收站",
-                    icon = Icons.Outlined.DeleteSweep,
-                    onClick = onNavigateToTrash
-                )
-            }
+            HorizontalDivider()
             
-            item {
-                SettingItem(
-                    title = "清空所有数据",
-                    icon = Icons.Outlined.DeleteForever,
+            // 系统区域
+            SettingsSection(title = "系统") {
+                // 版本信息
+                val versionInfo = viewModel.getCurrentVersion()
+                SettingsInfoItem(
+                    icon = Icons.Default.Info,
+                    title = "版本信息",
+                    subtitle = "v${versionInfo.first} (${versionInfo.second})"
+                )
+                
+                // 清除数据
+                SettingsClickableItem(
+                    icon = Icons.Default.DeleteForever,
+                    title = "清除所有数据",
+                    subtitle = "不可恢复，请谨慎操作",
                     onClick = { viewModel.showClearConfirm() },
-                    isDangerous = true
+                    danger = true
                 )
             }
             
-            // 关于
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsSection(title = "关于")
-            }
-            
-            item {
-                SettingItem(
-                    title = "版本",
-                    value = BuildConfig.VERSION_NAME,
-                    icon = Icons.Outlined.Info
-                )
-            }
-            
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = !uiState.isCheckingUpdate) { viewModel.checkForUpdate() },
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (uiState.isCheckingUpdate)
-                            MaterialTheme.colorScheme.surfaceVariant
-                        else MaterialTheme.colorScheme.surface
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+        
+        // 清除确认对话框
+        if (uiState.showClearConfirm) {
+            AlertDialog(
+                onDismissRequest = { viewModel.hideClearConfirm() },
+                icon = { Icon(Icons.Default.Warning, contentDescription = null) },
+                title = { Text("确认清除所有数据？") },
+                text = { Text("此操作不可恢复，所有记工记录将被永久删除。") },
+                confirmButton = {
+                    TextButton(
+                        onClick = { viewModel.clearAllData() },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.SystemUpdate,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "检查更新",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Text(
-                                text = if (uiState.isCheckingUpdate) "检查中..." else "点击检查新版本",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        if (uiState.isCheckingUpdate) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Outlined.ChevronRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Text("确认清除")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.hideClearConfirm() }) {
+                        Text("取消")
                     }
                 }
-            }
-            
-            item {
-                Spacer(modifier = Modifier.height(80.dp))
-            }
-        }
-        
-        // 时间选择器
-        if (showTimePicker) {
-            TimePickerDialog(
-                initialHour = uiState.settings.offWorkTime.substringBefore(":").toIntOrNull() ?: 18,
-                initialMinute = uiState.settings.offWorkTime.substringAfter(":").toIntOrNull() ?: 0,
-                onDismiss = { showTimePicker = false },
-                onConfirm = { hour, minute ->
-                    val time = String.format("%02d:%02d", hour, minute)
-                    viewModel.updateOffWorkTime(time)
-                    showTimePicker = false
-                }
             )
         }
         
-        // 清空确认对话框
-        if (uiState.showClearConfirm) {
-            ConfirmDialog(
-                title = "确认清空所有数据",
-                message = "确定要清空所有数据吗？此操作不可恢复！",
-                confirmText = "清空",
-                onConfirm = { viewModel.clearAllData() },
-                onDismiss = { viewModel.hideClearConfirm() },
-                isDangerous = true
-            )
-        }
-        
-        // 云同步配置对话框
+        // 云配置对话框
         if (uiState.showCloudConfigDialog) {
             CloudConfigDialog(
                 serverUrl = uiState.cloudServerUrlInput,
                 username = uiState.cloudUsernameInput,
                 password = uiState.cloudPasswordInput,
-                syncResult = uiState.syncResult,
                 onServerUrlChange = { viewModel.updateCloudServerUrl(it) },
                 onUsernameChange = { viewModel.updateCloudUsername(it) },
                 onPasswordChange = { viewModel.updateCloudPassword(it) },
@@ -499,34 +267,225 @@ fun SettingsScreen(
             )
         }
         
-        // 更新对话框
-        uiState.updateCheckResult?.let { result ->
-            when (result) {
-                is UpdateCheckResult.UpdateAvailable -> {
-                    val context = LocalContext.current
-                    UpdateDialog(
-                        releaseInfo = result.info,
-                        downloadState = uiState.downloadState,
-                        onDismiss = { viewModel.clearUpdateCheckResult() },
-                        onUpdate = {
-                            (context as? Activity)?.let { viewModel.downloadAndInstallUpdate(it) }
-                        }
-                    )
-                }
-                is UpdateCheckResult.NoUpdate -> {
-                    LaunchedEffect(Unit) {
-                        snackbarHostState.showSnackbar("当前已是最新版本")
-                        viewModel.clearUpdateCheckResult()
+        // 导入策略对话框
+        if (uiState.showImportStrategyDialog) {
+            AlertDialog(
+                onDismissRequest = { viewModel.cancelImport() },
+                icon = { Icon(Icons.Default.Download, contentDescription = null) },
+                title = { Text("导入数据") },
+                text = { 
+                    Text("将导入 ${uiState.pendingImportRecords?.size ?: 0} 条新记录到本地数据库。\n\n重复记录将被自动跳过。") 
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.confirmImport() }) {
+                        Text("确认导入")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.cancelImport() }) {
+                        Text("取消")
                     }
                 }
-                is UpdateCheckResult.Error -> {
-                    LaunchedEffect(Unit) {
-                        snackbarHostState.showSnackbar(result.message)
-                        viewModel.clearUpdateCheckResult()
-                    }
-                }
+            )
+        }
+        
+        // 同步结果Snackbar
+        uiState.syncResult?.let { result ->
+            LaunchedEffect(result) {
+                // 显示Snackbar后自动清除
+                kotlinx.coroutines.delay(3000)
+                viewModel.clearSyncResult()
             }
         }
+        
+        // 导入结果Snackbar
+        uiState.importResult?.let { result ->
+            LaunchedEffect(result) {
+                kotlinx.coroutines.delay(3000)
+                viewModel.clearImportResult()
+            }
+        }
+        
+        // 导出结果Snackbar
+        uiState.exportResult?.let { result ->
+            LaunchedEffect(result) {
+                kotlinx.coroutines.delay(3000)
+                viewModel.clearExportResult()
+            }
+        }
+        
+        // 显示结果Snackbar
+        val snackbarHostState = remember { SnackbarHostState() }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.padding(16.dp)
+        )
+        
+        LaunchedEffect(uiState.syncResult, uiState.importResult, uiState.exportResult) {
+            val result = uiState.syncResult ?: uiState.importResult ?: uiState.exportResult
+            result?.let {
+                snackbarHostState.showSnackbar(it)
+            }
+        }
+        
+        // 同步加载指示器
+        if (uiState.isSyncing || uiState.isExporting || uiState.isImporting) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsSection(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        )
+        content()
+    }
+}
+
+@Composable
+fun SettingsInfoItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun SettingsClickableItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    danger: Boolean = false
+) {
+    val contentColor = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        danger -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (danger) MaterialTheme.colorScheme.error 
+                   else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = contentColor
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant 
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+        }
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
+    }
+}
+
+@Composable
+fun NumberSettingItem(
+    title: String,
+    subtitle: String,
+    value: Double,
+    onValueChange: (Double) -> Unit,
+    prefix: String = "",
+    suffix: String = ""
+) {
+    var textValue by remember(value) { mutableStateOf(if (value == value.toLong().toDouble()) 
+        value.toLong().toString() else value.toString()) }
+    var isEditing by remember { mutableStateOf(false) }
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        OutlinedTextField(
+            value = if (isEditing) textValue else "$prefix$value$suffix",
+            onValueChange = { 
+                textValue = it.filter { c -> c.isDigit() || c == '.' }
+                it.toDoubleOrNull()?.let { v -> onValueChange(v) }
+            },
+            modifier = Modifier.width(120.dp),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            trailingIcon = { Text(suffix, style = MaterialTheme.typography.bodySmall) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+            )
+        )
     }
 }
 
@@ -535,659 +494,70 @@ fun CloudConfigDialog(
     serverUrl: String,
     username: String,
     password: String,
-    syncResult: String?,
     onServerUrlChange: (String) -> Unit,
     onUsernameChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            shape = MaterialTheme.shapes.large
-        ) {
+    var passwordVisible by remember { mutableStateOf(false) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.Cloud, contentDescription = null) },
+        title = { Text("云同步设置") },
+        text = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(24.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.CloudSync,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "云服务器配置",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Text(
-                    text = "配置与群晖NAS上Docker部署的Web版进行数据同步",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // 服务器地址
                 OutlinedTextField(
                     value = serverUrl,
                     onValueChange = onServerUrlChange,
                     label = { Text("服务器地址") },
-                    placeholder = { Text("http://192.168.1.100:5000") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Link, contentDescription = null)
-                    },
+                    placeholder = { Text("http://www.example.com:8080") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    supportingText = { Text("Web端Docker服务地址") }
                 )
                 
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // 用户名
                 OutlinedTextField(
                     value = username,
                     onValueChange = onUsernameChange,
                     label = { Text("用户名") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Person, contentDescription = null)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // 密码
                 OutlinedTextField(
                     value = password,
                     onValueChange = onPasswordChange,
                     label = { Text("密码") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Lock, contentDescription = null)
+                    singleLine = true,
+                    visualTransformation = if (passwordVisible) 
+                        VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Default.VisibilityOff 
+                                             else Icons.Default.Visibility,
+                                contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
+                            )
+                        }
                     },
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    modifier = Modifier.fillMaxWidth()
                 )
-                
-                // 提示信息
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "💡 服务器地址需要包含完整的URL和端口号",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                
-                // 同步结果
-                if (syncResult != null) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (syncResult.contains("成功")) 
-                                MaterialTheme.colorScheme.primaryContainer 
-                            else MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Text(
-                            text = syncResult,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(12.dp)
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // 按钮
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("取消")
-                    }
-                    Button(
-                        onClick = onSave,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("保存并测试")
-                    }
-                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onSave) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
             }
         }
-    }
-}
-
-@Composable
-fun SettingsSection(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(vertical = 8.dp)
     )
-}
-
-@Composable
-fun SettingItem(
-    title: String,
-    subtitle: String? = null,
-    value: String? = null,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: (() -> Unit)? = null,
-    isDangerous: Boolean = false
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (isDangerous) MaterialTheme.colorScheme.error 
-                       else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (isDangerous) MaterialTheme.colorScheme.error 
-                           else MaterialTheme.colorScheme.onSurface
-                )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            if (value != null) {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (onClick != null) {
-                Icon(
-                    imageVector = Icons.Outlined.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun SwitchSettingItem(
-    title: String,
-    subtitle: String? = null,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange
-            )
-        }
-    }
-}
-
-@Composable
-fun ClickableSettingItem(
-    title: String,
-    value: String,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-    }
-}
-
-@Composable
-fun NumberSettingItem(
-    title: String,
-    value: Double,
-    prefix: String = "",
-    suffix: String = "",
-    onValueChange: (Double) -> Unit
-) {
-    var textValue by remember(value) { mutableStateOf(if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()) }
-    
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = textValue,
-                onValueChange = { newValue ->
-                    textValue = newValue.filter { it.isDigit() || it == '.' }
-                    textValue.toDoubleOrNull()?.let { onValueChange(it) }
-                },
-                prefix = if (prefix.isNotEmpty()) { { Text(prefix) } } else null,
-                suffix = if (suffix.isNotEmpty()) { { Text(suffix) } } else null,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-        }
-    }
-}
-
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-fun ThemeSelector(
-    selectedTheme: String,
-    onThemeChange: (String) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                listOf(
-                    "system" to "跟随系统",
-                    "light" to "浅色",
-                    "dark" to "深色"
-                ).forEach { (value, label) ->
-                    FilterChip(
-                        selected = selectedTheme == value,
-                        onClick = { onThemeChange(value) },
-                        label = { Text(label) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TimePickerDialog(
-    initialHour: Int,
-    initialMinute: Int,
-    onDismiss: () -> Unit,
-    onConfirm: (hour: Int, minute: Int) -> Unit
-) {
-    val timePickerState = rememberTimePickerState(
-        initialHour = initialHour,
-        initialMinute = initialMinute
-    )
-    
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier.padding(16.dp),
-            shape = MaterialTheme.shapes.large
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "选择时间",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                TimePicker(state = timePickerState)
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("取消")
-                    }
-                    TextButton(onClick = { onConfirm(timePickerState.hour, timePickerState.minute) }) {
-                        Text("确认")
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * 应用更新对话框
- */
-@Composable
-fun UpdateDialog(
-    releaseInfo: ReleaseInfo,
-    downloadState: DownloadState,
-    onDismiss: () -> Unit,
-    onUpdate: () -> Unit
-) {
-    Dialog(onDismissRequest = {
-        if (downloadState !is DownloadState.Downloading) {
-            onDismiss()
-        }
-    }) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            shape = MaterialTheme.shapes.large
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(24.dp)
-            ) {
-                // 标题
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.SystemUpdate,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "发现新版本",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // 版本信息
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "新版本",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Text(
-                                text = "v${releaseInfo.versionName}",
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = "当前版本",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Text(
-                                text = BuildConfig.VERSION_NAME,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // 更新说明
-                Text(
-                    text = "更新内容",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Text(
-                        text = releaseInfo.releaseNotes.ifEmpty { "暂无更新说明" },
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(12.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // 下载进度
-                when (downloadState) {
-                    is DownloadState.Downloading -> {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "下载中...",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                    Text(
-                                        text = "${downloadState.progress}%",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                LinearProgressIndicator(
-                                    progress = downloadState.progress / 100f,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                        }
-                    }
-                    is DownloadState.Error -> {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        ) {
-                            Text(
-                                text = "下载失败: ${downloadState.message}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(12.dp)
-                            )
-                        }
-                    }
-                    is DownloadState.Completed -> {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.CheckCircle,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "下载完成，正在启动安装程序...",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                        }
-                    }
-                    else -> {}
-                }
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // 按钮
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        enabled = downloadState !is DownloadState.Downloading
-                    ) {
-                        Text("稍后再说")
-                    }
-                    
-                    val isDownloading = downloadState is DownloadState.Downloading
-                    val isCompleted = downloadState is DownloadState.Completed
-                    
-                    Button(
-                        onClick = onUpdate,
-                        modifier = Modifier.weight(1f),
-                        enabled = !isDownloading && !isCompleted
-                    ) {
-                        when {
-                            isDownloading -> {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("下载中")
-                            }
-                            isCompleted -> {
-                                Text("安装中...")
-                            }
-                            else -> {
-                                Icon(
-                                    imageVector = Icons.Outlined.Download,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("更新")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
