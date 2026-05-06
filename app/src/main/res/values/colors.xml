@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Colors -->
+    <color name="primary">#1890ff</color>
+    <color name="primary_dark">#096dd9</color>
+    <color name="primary_light">#40a9ff</color>
+    
+    <!-- Secondary Colors -->
+    <color name="secondary">#13c2c2</color>
+    <color name="secondary_dark">#08979c</color>
+    
+    <!-- Accent Colors -->
+    <color name="overtime">#fa8c16</color>
+    <color name="overtime_light">#ffbb00</color>
+    <color name="success">#52c41a</color>
+    <color name="warning">#faad14</color>
+    <color name="error">#ff4d4f</color>
+    
+    <!-- Neutral Colors -->
+    <color name="background">#f5f5f5</color>
+    <color name="surface">#ffffff</color>
+    <color name="on_surface">#262626</color>
+    <color name="on_surface_variant">#8c8c8c</color>
+    
+    <!-- Dark Theme -->
+    <color name="background_dark">#1a1a1a</color>
+    <color name="surface_dark">#262626</color>
+    <color name="on_surface_dark">#e8e8e8</color>
+    
+    <!-- Status Colors -->
+    <color name="record_standard">#1890ff</color>
+    <color name="record_overtime">#fa8c16</color>
+    <color name="record_manual">#13c2c2</color>
+    <color name="record_deleted">#d9d9d9</color>
+</resources>
