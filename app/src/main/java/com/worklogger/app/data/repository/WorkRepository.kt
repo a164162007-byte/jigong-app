@@ -1,73 +1,155 @@
 package com.worklogger.app.data.repository
 
+import com.worklogger.app.data.local.Dao
 import com.worklogger.app.data.local.AppDatabase
-import com.worklogger.app.data.local.QuickPhraseDao
-import com.worklogger.app.data.local.WorkRecordDao
 import com.worklogger.app.model.QuickPhrase
 import com.worklogger.app.model.WorkRecord
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 
-/**
- * 记工数据仓库
- */
-class WorkRepository(
-    private val workRecordDao: WorkRecordDao,
-    private val quickPhraseDao: QuickPhraseDao
-) {
-    // 记工记录操作
-    val allRecords: Flow<List<WorkRecord>> = workRecordDao.getAllRecords()
+class WorkRepository(private val dao: Dao) {
     
-    fun getRecordsByDate(date: String): Flow<List<WorkRecord>> = 
-        workRecordDao.getRecordsByDate(date)
+    val allRecords: Flow<List<WorkRecord>> = dao.getAllRecords()
+    val allPhrases: Flow<List<QuickPhrase>> = dao.getAllPhrases()
     
-    fun getRecordsByDateRange(startDate: String, endDate: String): Flow<List<WorkRecord>> =
-        workRecordDao.getRecordsByDateRange(startDate, endDate)
+    val trashRecords: Flow<List<WorkRecord>> = dao.getTrashRecords()
     
-    fun getRecordsByYearMonth(yearMonth: String): Flow<List<WorkRecord>> =
-        workRecordDao.getRecordsByYearMonth(yearMonth)
+    suspend fun insert(record: WorkRecord) {
+        dao.insert(record)
+    }
     
-    suspend fun getRecordsByDateSync(date: String): List<WorkRecord> =
-        workRecordDao.getRecordsByDateSync(date)
+    /**
+     * 插入记录（如果不存在则插入，存在则跳过）
+     * 
+     * 判断依据：日期(date) + 记录类型(isOvertime, isManual)
+     * 标准工、加班、手动记工可以同时存在于同一天
+     * 
+     * @param record 要插入的记录
+     * @return true 如果成功插入，false 如果记录已存在
+     */
+    suspend fun insertIfNotExists(record: WorkRecord): Boolean {
+        // 构建唯一键
+        val key = "${record.date}_${record.isOvertime}_${record.isManual}"
+        
+        // 获取所有记录
+        val allRecords = dao.getAllRecordsOnce()
+        
+        // 检查是否存在相同键的记录
+        val exists = allRecords.any { r ->
+            "${r.date}_${r.isOvertime}_${r.isManual}" == key
+        }
+        
+        if (!exists) {
+            dao.insert(record)
+            return true
+        }
+        return false
+    }
     
-    fun getRecentLocations(): Flow<List<String>> = workRecordDao.getRecentLocations()
+    /**
+     * 批量插入记录（如果不存在则插入）
+     * 
+     * @param records 要插入的记录列表
+     * @return 实际插入的记录数量
+     */
+    suspend fun insertAllIfNotExists(records: List<WorkRecord>): Int {
+        var insertedCount = 0
+        for (record in records) {
+            if (insertIfNotExists(record)) {
+                insertedCount++
+            }
+        }
+        return insertedCount
+    }
     
-    suspend fun getRecordById(id: Int): WorkRecord? = workRecordDao.getRecordById(id)
+    suspend fun update(record: WorkRecord) {
+        dao.update(record)
+    }
     
-    val deletedRecords: Flow<List<WorkRecord>> = workRecordDao.getDeletedRecords()
+    suspend fun delete(record: WorkRecord) {
+        dao.delete(record)
+    }
     
-    suspend fun getRecordCountByDateRange(startDate: String, endDate: String): Int =
-        workRecordDao.getRecordCountByDateRange(startDate, endDate)
+    suspend fun deleteAllRecords() {
+        dao.deleteAllRecords()
+    }
     
-    suspend fun insertRecord(record: WorkRecord): Long = workRecordDao.insert(record)
+    suspend fun getRecordById(id: Long): WorkRecord? {
+        return dao.getRecordById(id)
+    }
     
-    suspend fun updateRecord(record: WorkRecord) = workRecordDao.update(record)
+    suspend fun getRecordsByDate(date: String): List<WorkRecord> {
+        return dao.getRecordsByDate(date)
+    }
     
-    suspend fun softDeleteRecord(id: Int) = workRecordDao.softDelete(id)
+    suspend fun getRecordsByDateRange(startDate: String, endDate: String): List<WorkRecord> {
+        return dao.getRecordsByDateRange(startDate, endDate)
+    }
     
-    suspend fun restoreRecord(id: Int) = workRecordDao.restore(id)
+    suspend fun getRecordsByMonth(year: Int, month: Int): List<WorkRecord> {
+        val startDate = String.format("%04d-%02d-01", year, month)
+        val endDate = if (month == 12) {
+            String.format("%04d-01-01", year + 1)
+        } else {
+            String.format("%04d-%02d-01", year, month + 1)
+        }
+        return dao.getRecordsByDateRange(startDate, endDate)
+    }
     
-    suspend fun permanentDeleteRecord(id: Int) = workRecordDao.permanentDelete(id)
+    suspend fun getRecordsByYear(year: Int): List<WorkRecord> {
+        val startDate = String.format("%04d-01-01", year)
+        val endDate = String.format("%04d-01-01", year + 1)
+        return dao.getRecordsByDateRange(startDate, endDate)
+    }
     
-    suspend fun cleanOldDeleted(beforeTime: Long) = workRecordDao.cleanOldDeleted(beforeTime)
+    // 快捷短语相关
+    suspend fun addPhrase(phrase: QuickPhrase) {
+        dao.insertPhrase(phrase)
+    }
     
-    suspend fun clearAllRecords() = workRecordDao.clearAll()
+    suspend fun deletePhrase(phrase: QuickPhrase) {
+        dao.deletePhrase(phrase)
+    }
     
-    suspend fun getAllRecordsSync(): List<WorkRecord> = workRecordDao.getAllRecordsSync()
+    suspend fun updatePhrase(phrase: QuickPhrase) {
+        dao.updatePhrase(phrase)
+    }
     
-    suspend fun insertAllRecords(records: List<WorkRecord>) = workRecordDao.insertAll(records)
+    // 回收站相关
+    suspend fun moveToTrash(record: WorkRecord) {
+        dao.moveToTrash(record.id)
+    }
     
-    // 快捷短语操作
-    val allPhrases: Flow<List<QuickPhrase>> = quickPhraseDao.getAllPhrases()
+    suspend fun restoreFromTrash(record: WorkRecord) {
+        dao.restoreFromTrash(record.id)
+    }
     
-    suspend fun getPhraseById(id: Int): QuickPhrase? = quickPhraseDao.getPhraseById(id)
+    suspend fun permanentlyDelete(record: WorkRecord) {
+        dao.permanentlyDelete(record.id)
+    }
     
-    suspend fun insertPhrase(phrase: QuickPhrase): Long = quickPhraseDao.insert(phrase)
+    suspend fun emptyTrash() {
+        dao.emptyTrash()
+    }
     
-    suspend fun updatePhrase(phrase: QuickPhrase) = quickPhraseDao.update(phrase)
+    // 统计相关
+    suspend fun getStandardCount(records: List<WorkRecord>): Int {
+        return records.count { !it.isOvertime && !it.isManual }
+    }
     
-    suspend fun incrementPhraseUseCount(id: Int) = quickPhraseDao.incrementUseCount(id)
+    suspend fun getOvertimeHours(records: List<WorkRecord>): Double {
+        return records.filter { it.isOvertime }.sumOf { it.hours }
+    }
     
-    suspend fun deletePhrase(id: Int) = quickPhraseDao.delete(id)
+    suspend fun getMealSubsidyCount(records: List<WorkRecord>): Int {
+        return records.count { !it.isOvertime && !it.isManual && it.mealSubsidy }
+    }
     
-    suspend fun clearAllPhrases() = quickPhraseDao.clearAll()
+    suspend fun getTotalHours(records: List<WorkRecord>): Double {
+        return records.sumOf { it.hours }
+    }
+    
+    suspend fun getAllLocations(): List<String> {
+        return dao.getAllLocations()
+    }
 }
