@@ -469,13 +469,13 @@ fun SettingsScreen(
         uiState.updateCheckResult?.let { result ->
             when (result) {
                 is UpdateCheckResult.UpdateAvailable -> {
+                    val context = LocalContext.current
                     UpdateDialog(
                         releaseInfo = result.info,
                         downloadState = uiState.downloadState,
                         onDismiss = { viewModel.clearUpdateCheckResult() },
                         onUpdate = {
-                            val activity = LocalContext.current as Activity
-                            activity?.let { viewModel.downloadAndInstallUpdate(it) }
+                            (context as? Activity)?.let { viewModel.downloadAndInstallUpdate(it) }
                         }
                     )
                 }
@@ -1058,7 +1058,7 @@ fun UpdateDialog(
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                                 LinearProgressIndicator(
-                                    progress = { downloadState.progress / 100f },
+                                    progress = downloadState.progress / 100f,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                             }
