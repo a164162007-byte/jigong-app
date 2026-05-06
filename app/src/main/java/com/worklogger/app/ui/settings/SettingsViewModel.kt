@@ -361,6 +361,66 @@ class SettingsViewModel(
         _uiState.update { it.copy(syncResult = null) }
     }
     
+    /**
+     * 从云端下载数据
+     */
+    fun downloadFromCloud() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSyncing = true) }
+            
+            val settings = _uiState.value.settings
+            if (settings.cloudServerUrl.isBlank() || settings.cloudUsername.isBlank()) {
+                _uiState.update { 
+                    it.copy(isSyncing = false, syncResult = "请先配置云服务器信息") 
+                }
+                return@launch
+            }
+            
+            // 获取本地所有记录
+            val localRecords = workRepository.getAllRecordsSync()
+            
+            // 从云端下载数据
+            val result = cloudSyncService.downloadData(
+                serverUrl = settings.cloudServerUrl,
+                username = settings.cloudUsername,
+                password = settings.cloudPassword,
+                localRecords = localRecords
+            )
+            
+            result.fold(
+                onSuccess = { cloudRecords ->
+                    if (cloudRecords.isEmpty()) {
+                        _uiState.update { 
+                            it.copy(
+                                isSyncing = false,
+                                syncResult = "云端没有新数据需要下载"
+                            ) 
+                        }
+                    } else {
+                        // 将云端记录转换为本地记录并插入
+                        val recordsToInsert = cloudRecords.map { cloudSyncService.cloudRecordToWorkRecord(it) }
+                        workRepository.insertAllRecords(recordsToInsert)
+                        
+                        // 更新最后同步时间
+                        settingsRepository.updateCloudLastSyncTime(System.currentTimeMillis())
+                        
+                        _uiState.update { 
+                            it.copy(
+                                isSyncing = false,
+                                syncResult = "下载成功！已导入 ${recordsToInsert.size} 条记录"
+                            ) 
+                        }
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { 
+                        it.copy(isSyncing = false, syncResult = "下载失败: ${error.message}") 
+                    }
+                }
+            )
+        }
+    }
+    
     fun addPhrase(phrase: String) {
         viewModelScope.launch {
             if (phrase.isNotBlank()) {
