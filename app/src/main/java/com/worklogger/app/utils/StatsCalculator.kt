@@ -22,13 +22,24 @@ object StatsCalculator {
             return StatsData()
         }
         
-        // 标准工天数：不是加班且不是手动的记录
+        // 标准工记录：不是加班且不是手动的记录
         val standardRecords = records.filter { !it.isOvertime && !it.isManual }
-        val standardDays = standardRecords.size.toDouble()
         
-        // 手动折算天数
+        // 标准工天数：按实际工时换算（而非记录数量）
+        // 例如：8小时 = 1天，4小时 = 0.5天
+        val standardDays = if (dailyWorkHours > 0) {
+            standardRecords.sumOf { it.hours } / dailyWorkHours
+        } else {
+            0.0
+        }
+        
+        // 手动折算天数：按实际工时换算
         val manualRecords = records.filter { it.isManual && !it.isOvertime }
-        val manualDays = manualRecords.size.toDouble()
+        val manualDays = if (dailyWorkHours > 0) {
+            manualRecords.sumOf { it.hours } / dailyWorkHours
+        } else {
+            0.0
+        }
         
         // 加班总小时
         val overtimeRecords = records.filter { it.isOvertime }
@@ -40,8 +51,15 @@ object StatsCalculator {
         // 总标准工
         val totalStandard = standardDays + manualDays + overtimeDays
         
-        // 有饭补的标准工天数
-        val mealSubsidyDays = standardRecords.count { it.mealSubsidy }.toDouble()
+        // 饭补计算：标准工按实际工时比例计算
+        // 例如：8小时全额饭补，4小时半额饭补
+        val mealSubsidyDays = if (dailyWorkHours > 0) {
+            standardRecords.sumOf { 
+                if (it.mealSubsidy) it.hours / dailyWorkHours else 0.0 
+            }
+        } else {
+            0.0
+        }
         val mealSubsidyTotal = mealSubsidyDays * mealSubsidyStandard
         
         // 应发工资
