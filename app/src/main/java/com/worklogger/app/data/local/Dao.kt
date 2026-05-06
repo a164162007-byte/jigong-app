@@ -5,91 +5,70 @@ import com.worklogger.app.model.QuickPhrase
 import com.worklogger.app.model.WorkRecord
 import kotlinx.coroutines.flow.Flow
 
-/**
- * 记工记录 DAO
- */
 @Dao
-interface WorkRecordDao {
+interface Dao {
     
-    @Query("SELECT * FROM work_records WHERE isDeleted = 0 ORDER BY date DESC, createdAt DESC")
+    // ==================== WorkRecord 操作 ====================
+    
+    @Query("SELECT * FROM work_records WHERE deleted_at IS NULL ORDER BY date DESC, id DESC")
     fun getAllRecords(): Flow<List<WorkRecord>>
     
-    @Query("SELECT * FROM work_records WHERE isDeleted = 0 AND date = :date ORDER BY createdAt DESC")
-    fun getRecordsByDate(date: String): Flow<List<WorkRecord>>
-    
-    @Query("SELECT * FROM work_records WHERE isDeleted = 0 AND date BETWEEN :startDate AND :endDate ORDER BY date DESC, createdAt DESC")
-    fun getRecordsByDateRange(startDate: String, endDate: String): Flow<List<WorkRecord>>
-    
-    @Query("SELECT * FROM work_records WHERE isDeleted = 0 AND date LIKE :yearMonth || '%' ORDER BY date DESC, createdAt DESC")
-    fun getRecordsByYearMonth(yearMonth: String): Flow<List<WorkRecord>>
-    
-    @Query("SELECT * FROM work_records WHERE isDeleted = 0 AND date = :date")
-    suspend fun getRecordsByDateSync(date: String): List<WorkRecord>
-    
-    @Query("SELECT DISTINCT location FROM work_records WHERE isDeleted = 0 AND location != '' ORDER BY (SELECT MAX(createdAt) FROM work_records w2 WHERE w2.location = work_records.location) DESC LIMIT 5")
-    fun getRecentLocations(): Flow<List<String>>
+    @Query("SELECT * FROM work_records WHERE deleted_at IS NULL ORDER BY date DESC, id DESC")
+    suspend fun getAllRecordsOnce(): List<WorkRecord>
     
     @Query("SELECT * FROM work_records WHERE id = :id")
-    suspend fun getRecordById(id: Int): WorkRecord?
+    suspend fun getRecordById(id: Long): WorkRecord?
     
-    @Query("SELECT * FROM work_records WHERE isDeleted = 1 ORDER BY deletedAt DESC")
-    fun getDeletedRecords(): Flow<List<WorkRecord>>
+    @Query("SELECT * FROM work_records WHERE date = :date AND deleted_at IS NULL ORDER BY id DESC")
+    suspend fun getRecordsByDate(date: String): List<WorkRecord>
     
-    @Query("SELECT COUNT(*) FROM work_records WHERE isDeleted = 0 AND date BETWEEN :startDate AND :endDate")
-    suspend fun getRecordCountByDateRange(startDate: String, endDate: String): Int
+    @Query("SELECT * FROM work_records WHERE date >= :startDate AND date < :endDate AND deleted_at IS NULL ORDER BY date DESC, id DESC")
+    suspend fun getRecordsByDateRange(startDate: String, endDate: String): List<WorkRecord>
+    
+    @Query("SELECT * FROM work_records WHERE date >= :startDate AND date < :endDate AND deleted_at IS NULL ORDER BY date DESC")
+    suspend fun getRecordsByMonth(startDate: String, endDate: String): List<WorkRecord>
+    
+    @Query("SELECT * FROM work_records WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+    fun getTrashRecords(): Flow<List<WorkRecord>>
+    
+    @Query("SELECT DISTINCT location FROM work_records WHERE deleted_at IS NULL ORDER BY location")
+    suspend fun getAllLocations(): List<String>
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(record: WorkRecord): Long
+    suspend fun insert(record: WorkRecord)
     
     @Update
     suspend fun update(record: WorkRecord)
     
-    @Query("UPDATE work_records SET isDeleted = 1, deletedAt = :deletedAt, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun softDelete(id: Int, deletedAt: Long = System.currentTimeMillis(), updatedAt: Long = System.currentTimeMillis())
+    @Delete
+    suspend fun delete(record: WorkRecord)
     
-    @Query("UPDATE work_records SET isDeleted = 0, deletedAt = NULL, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun restore(id: Int, updatedAt: Long = System.currentTimeMillis())
+    @Query("DELETE FROM work_records WHERE deleted_at IS NULL")
+    suspend fun deleteAllRecords()
+    
+    @Query("UPDATE work_records SET deleted_at = :timestamp WHERE id = :id")
+    suspend fun moveToTrash(id: Long, timestamp: Long = System.currentTimeMillis())
+    
+    @Query("UPDATE work_records SET deleted_at = NULL WHERE id = :id")
+    suspend fun restoreFromTrash(id: Long)
     
     @Query("DELETE FROM work_records WHERE id = :id")
-    suspend fun permanentDelete(id: Int)
+    suspend fun permanentlyDelete(id: Long)
     
-    @Query("DELETE FROM work_records WHERE isDeleted = 1 AND deletedAt < :beforeTime")
-    suspend fun cleanOldDeleted(beforeTime: Long)
+    @Query("DELETE FROM work_records WHERE deleted_at IS NOT NULL")
+    suspend fun emptyTrash()
     
-    @Query("DELETE FROM work_records WHERE isDeleted = 0")
-    suspend fun clearAll()
+    // ==================== QuickPhrase 操作 ====================
     
-    @Query("SELECT * FROM work_records WHERE isDeleted = 0")
-    suspend fun getAllRecordsSync(): List<WorkRecord>
-    
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(records: List<WorkRecord>)
-}
-
-/**
- * 快捷短语 DAO
- */
-@Dao
-interface QuickPhraseDao {
-    
-    @Query("SELECT * FROM quick_phrases ORDER BY useCount DESC, createdAt DESC")
+    @Query("SELECT * FROM quick_phrases ORDER BY id DESC")
     fun getAllPhrases(): Flow<List<QuickPhrase>>
     
-    @Query("SELECT * FROM quick_phrases WHERE id = :id")
-    suspend fun getPhraseById(id: Int): QuickPhrase?
-    
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(phrase: QuickPhrase): Long
+    suspend fun insertPhrase(phrase: QuickPhrase)
     
     @Update
-    suspend fun update(phrase: QuickPhrase)
+    suspend fun updatePhrase(phrase: QuickPhrase)
     
-    @Query("UPDATE quick_phrases SET useCount = useCount + 1 WHERE id = :id")
-    suspend fun incrementUseCount(id: Int)
-    
-    @Query("DELETE FROM quick_phrases WHERE id = :id")
-    suspend fun delete(id: Int)
-    
-    @Query("DELETE FROM quick_phrases")
-    suspend fun clearAll()
+    @Delete
+    suspend fun deletePhrase(phrase: QuickPhrase)
 }
