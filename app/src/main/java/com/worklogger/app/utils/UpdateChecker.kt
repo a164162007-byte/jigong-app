@@ -1,0 +1,175 @@
+package com.worklogger.app.utils
+
+import com.google.gson.Gson
+import com.google.gson.JsonObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
+
+/**
+ * GitHub releases 信息
+ */
+data class ReleaseInfo(
+    val versionName: String,
+    val versionCode: Int,
+    val releaseNotes: String,
+    val downloadUrl: String,
+    val isNewerThan: (String) -> Boolean
+)
+
+/**
+ * 应用更新检查器
+ * 用于检查 GitHub Releases 是否有新版本
+ */
+class UpdateChecker {
+    
+    companion object {
+        private const val GITHUB_API_URL = "https://api.github.com/repos/a164162007-byte/jigong-app/releases/latest"
+        private const val CURRENT_VERSION_NAME = "1.2.0"
+        private const val CURRENT_VERSION_CODE = 120
+    }
+    
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .build()
+    
+    private val gson = Gson()
+    
+    /**
+     * 检查是否有新版本
+     * @return ReleaseInfo? 如果有更新返回更新信息，否则返回 null
+     */
+    suspend fun checkForUpdate(): Result<ReleaseInfo> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url(GITHUB_API_URL)
+                .header("Accept", "application/vnd.github.v3+json")
+                .get()
+                .build()
+            
+            val response = client.newCall(request).execute()
+            
+            if (!response.isSuccessful) {
+                return@withContext Result.failure(Exception("检查更新失败: HTTP ${response.code}"))
+            }
+            
+            val body = response.body?.string()
+            if (body.isNullOrEmpty()) {
+                return@withContext Result.failure(Exception("检查更新失败: 响应为空"))
+            }
+            
+            val json = gson.fromJson(body, JsonObject::class.java)
+            
+            val tagName = json.get("tag_name")?.asString ?: ""
+            val bodyContent = json.get("body")?.asString ?: "暂无更新说明"
+            val assets = json.getAsJsonArray("assets")
+            
+            // 提取版本号（去掉 v 前缀）
+            val versionName = tagName.removePrefix("v")
+            
+            // 查找 APK 文件
+            var downloadUrl: String? = null
+            if (assets != null) {
+                for (asset in assets) {
+                    val name = asset.asJsonObject.get("name")?.asString ?: ""
+                    if (name.endsWith(".apk", ignoreCase = true)) {
+                        downloadUrl = asset.asJsonObject.get("browser_download_url")?.asString
+                        break
+                    }
+                }
+            }
+            
+            // 如果没找到 APK，从 HtmlUrl 获取
+            if (downloadUrl == null) {
+                val htmlUrl = json.get("html_url")?.asString
+                if (htmlUrl != null) {
+                    // 从 Release 页面构建 APK 下载链接
+                    val repoUrl = "https://github.com/a164162007-byte/jigong-app/releases/download/$tagName"
+                    downloadUrl = "$repoUrl/jigong-app-$versionName.apk"
+                }
+            }
+            
+            if (downloadUrl == null) {
+                return@withContext Result.failure(Exception("未找到 APK 下载链接"))
+            }
+            
+            // 计算新版本号（从版本名解析）
+            val newVersionCode = parseVersionCode(versionName)
+            
+            val releaseInfo = ReleaseInfo(
+                versionName = versionName,
+                versionCode = newVersionCode,
+                releaseNotes = bodyContent,
+                downloadUrl = downloadUrl,
+                isNewerThan = { currentVersion ->
+                    compareVersions(currentVersion, versionName) > 0
+                }
+            )
+            
+            Result.success(releaseInfo)
+            
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * 比较版本号
+     * @return 正数表示 v1 > v2，0 表示相等，负数表示 v1 < v2
+     */
+    private fun compareVersions(v1: String, v2: String): Int {
+        val version1 = v1.removePrefix("v").split(".").mapNotNull { it.toIntOrNull() }
+        val version2 = v2.removePrefix("v").split(".").mapNotNull { it.toIntOrNull() }
+        
+        val maxLength = maxOf(version1.size, version2.size)
+        
+        for (i in 0 until maxLength) {
+            val num1 = version1.getOrElse(i) { 0 }
+            val num2 = version2.getOrElse(i) { 0 }
+            
+            if (num1 != num2) {
+                return num1 - num2
+            }
+        }
+        
+        return 0
+    }
+    
+    /**
+     * 从版本名解析版本码
+     */
+    private fun parseVersionCode(versionName: String): Int {
+        val parts = versionName.removePrefix("v").split(".")
+        if (parts.size >= 2) {
+            try {
+                val major = parts[0].toIntOrNull() ?: 0
+                val minor = parts[1].toIntOrNull() ?: 0
+                val patch = parts.getOrNull(2)?.toIntOrNull() ?: 0
+                return major * 100 + minor * 10 + patch
+            } catch (e: Exception) {
+                return CURRENT_VERSION_CODE + 1
+            }
+        }
+        return CURRENT_VERSION_CODE + 1
+    }
+    
+    /**
+     * 获取当前版本信息
+     */
+    fun getCurrentVersion(): Pair<String, Int> {
+        return Pair(CURRENT_VERSION_NAME, CURRENT_VERSION_CODE)
+    }
+    
+    /**
+     * 检查是否需要更新
+     */
+    suspend fun isUpdateAvailable(): Boolean = withContext(Dispatchers.IO) {
+        val result = checkForUpdate()
+        result.getOrNull()?.let { info ->
+            compareVersions(CURRENT_VERSION_NAME, info.versionName) < 0
+        } ?: false
+    }
+}
