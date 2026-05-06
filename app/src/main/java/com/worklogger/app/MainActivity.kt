@@ -44,8 +44,11 @@ import com.worklogger.app.ui.trash.TrashViewModel
 import com.worklogger.app.ui.trash.TrashViewModelFactory
 import com.worklogger.app.utils.DateUtils
 import com.worklogger.app.utils.NotificationHelper
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 sealed class Screen(
@@ -62,6 +65,10 @@ sealed class Screen(
 
 class MainActivity : ComponentActivity() {
     
+    // 使用 SupervisorJob 管理协程生命周期
+    private val activityJob = SupervisorJob()
+    private val scope = CoroutineScope(Dispatchers.Main + activityJob)
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -72,8 +79,8 @@ class MainActivity : ComponentActivity() {
         // 初始化通知
         val notificationHelper = NotificationHelper(this)
         
-        // 设置提醒
-        GlobalScope.launch(Dispatchers.Main) {
+        // 设置提醒 - 使用 scope 管理协程生命周期
+        scope.launch {
             app.settingsRepository.settings.collect { settings ->
                 notificationHelper.scheduleOffWorkReminder(
                     DateUtils.getHour(settings.offWorkTime),
@@ -93,6 +100,12 @@ class MainActivity : ComponentActivity() {
                 MainScreen(app)
             }
         }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // 取消所有协程，防止内存泄漏
+        activityJob.cancel()
     }
 }
 
