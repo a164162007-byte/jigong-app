@@ -26,6 +26,12 @@ class SettingsDataStore(private val context: Context) {
         private val MISSED_DAY_REMINDER = booleanPreferencesKey("missed_day_reminder")
         private val THEME = stringPreferencesKey("theme")
         private val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
+        // 云同步配置键
+        private val CLOUD_SYNC_ENABLED = booleanPreferencesKey("cloud_sync_enabled")
+        private val CLOUD_SERVER_URL = stringPreferencesKey("cloud_server_url")
+        private val CLOUD_USERNAME = stringPreferencesKey("cloud_username")
+        private val CLOUD_PASSWORD = stringPreferencesKey("cloud_password")
+        private val CLOUD_LAST_SYNC_TIME = longPreferencesKey("cloud_last_sync_time")
     }
     
     val settings: Flow<UserSettings> = context.dataStore.data.map { preferences ->
@@ -39,7 +45,13 @@ class SettingsDataStore(private val context: Context) {
             offWorkReminder = preferences[OFF_WORK_REMINDER] ?: true,
             missedDayReminder = preferences[MISSED_DAY_REMINDER] ?: true,
             theme = preferences[THEME] ?: "system",
-            biometricEnabled = preferences[BIOMETRIC_ENABLED] ?: false
+            biometricEnabled = preferences[BIOMETRIC_ENABLED] ?: false,
+            // 云同步配置
+            cloudSyncEnabled = preferences[CLOUD_SYNC_ENABLED] ?: false,
+            cloudServerUrl = preferences[CLOUD_SERVER_URL] ?: "",
+            cloudUsername = preferences[CLOUD_USERNAME] ?: "",
+            cloudPassword = preferences[CLOUD_PASSWORD] ?: "",
+            cloudLastSyncTime = preferences[CLOUD_LAST_SYNC_TIME] ?: 0L
         )
     }
     
@@ -55,6 +67,12 @@ class SettingsDataStore(private val context: Context) {
             preferences[MISSED_DAY_REMINDER] = settings.missedDayReminder
             preferences[THEME] = settings.theme
             preferences[BIOMETRIC_ENABLED] = settings.biometricEnabled
+            // 云同步配置
+            preferences[CLOUD_SYNC_ENABLED] = settings.cloudSyncEnabled
+            preferences[CLOUD_SERVER_URL] = settings.cloudServerUrl
+            preferences[CLOUD_USERNAME] = settings.cloudUsername
+            preferences[CLOUD_PASSWORD] = settings.cloudPassword
+            preferences[CLOUD_LAST_SYNC_TIME] = settings.cloudLastSyncTime
         }
     }
     
@@ -96,6 +114,27 @@ class SettingsDataStore(private val context: Context) {
     
     suspend fun updateBiometricEnabled(enabled: Boolean) {
         context.dataStore.edit { it[BIOMETRIC_ENABLED] = enabled }
+    }
+    
+    // 云同步配置方法
+    suspend fun updateCloudSyncEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[CLOUD_SYNC_ENABLED] = enabled }
+    }
+    
+    suspend fun updateCloudServerUrl(url: String) {
+        context.dataStore.edit { it[CLOUD_SERVER_URL] = url }
+    }
+    
+    suspend fun updateCloudUsername(username: String) {
+        context.dataStore.edit { it[CLOUD_USERNAME] = username }
+    }
+    
+    suspend fun updateCloudPassword(password: String) {
+        context.dataStore.edit { it[CLOUD_PASSWORD] = password }
+    }
+    
+    suspend fun updateCloudLastSyncTime(time: Long) {
+        context.dataStore.edit { it[CLOUD_LAST_SYNC_TIME] = time }
     }
     
     suspend fun clearAll() {
