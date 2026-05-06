@@ -10,16 +10,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.worklogger.app.BuildConfig
 import com.worklogger.app.ui.components.ConfirmDialog
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,6 +39,13 @@ fun SettingsScreen(
         uiState.exportResult?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearExportResult()
+        }
+    }
+    
+    LaunchedEffect(uiState.syncResult) {
+        uiState.syncResult?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearSyncResult()
         }
     }
     
@@ -167,6 +176,127 @@ fun SettingsScreen(
                 )
             }
             
+            // 云同步设置
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsSection(title = "云同步 (Docker)")
+            }
+            
+            // 云同步开关
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.CloudSync,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "启用云同步",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Text(
+                                    text = "与群晖NAS上的Web版同步数据",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = uiState.settings.cloudSyncEnabled,
+                                onCheckedChange = { viewModel.toggleCloudSync(it) }
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // 云同步状态和操作
+            if (uiState.settings.cloudSyncEnabled) {
+                // 服务器配置按钮
+                item {
+                    SettingItem(
+                        title = "服务器配置",
+                        subtitle = if (uiState.settings.cloudServerUrl.isNotEmpty()) 
+                            uiState.settings.cloudServerUrl else "点击配置服务器信息",
+                        icon = Icons.Outlined.Dns,
+                        onClick = { viewModel.showCloudConfigDialog() }
+                    )
+                }
+                
+                // 最后同步时间
+                if (uiState.settings.cloudLastSyncTime > 0) {
+                    item {
+                        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                        val syncTime = dateFormat.format(Date(uiState.settings.cloudLastSyncTime))
+                        SettingItem(
+                            title = "上次同步",
+                            value = syncTime,
+                            icon = Icons.Outlined.Schedule
+                        )
+                    }
+                }
+                
+                // 同步按钮
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !uiState.isSyncing) { viewModel.syncToCloud() },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (uiState.isSyncing) 
+                                MaterialTheme.colorScheme.surfaceVariant 
+                            else MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (uiState.isSyncing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "同步中...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Outlined.Sync,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "同步到云端",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            
             // 快捷短语
             item {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -230,7 +360,7 @@ fun SettingsScreen(
             item {
                 SettingItem(
                     title = "版本",
-                    value = "1.0.0",
+                    value = BuildConfig.VERSION_NAME,
                     icon = Icons.Outlined.Info
                 )
             }
@@ -265,10 +395,169 @@ fun SettingsScreen(
                 isDangerous = true
             )
         }
+        
+        // 云同步配置对话框
+        if (uiState.showCloudConfigDialog) {
+            CloudConfigDialog(
+                serverUrl = uiState.cloudServerUrlInput,
+                username = uiState.cloudUsernameInput,
+                password = uiState.cloudPasswordInput,
+                syncResult = uiState.syncResult,
+                onServerUrlChange = { viewModel.updateCloudServerUrl(it) },
+                onUsernameChange = { viewModel.updateCloudUsername(it) },
+                onPasswordChange = { viewModel.updateCloudPassword(it) },
+                onDismiss = { viewModel.hideCloudConfigDialog() },
+                onSave = { viewModel.saveCloudConfig() }
+            )
+        }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CloudConfigDialog(
+    serverUrl: String,
+    username: String,
+    password: String,
+    syncResult: String?,
+    onServerUrlChange: (String) -> Unit,
+    onUsernameChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSave: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.CloudSync,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "云服务器配置",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = "配置与群晖NAS上Docker部署的Web版进行数据同步",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // 服务器地址
+                OutlinedTextField(
+                    value = serverUrl,
+                    onValueChange = onServerUrlChange,
+                    label = { Text("服务器地址") },
+                    placeholder = { Text("http://192.168.1.100:5000") },
+                    leadingIcon = {
+                        Icon(Icons.Outlined.Link, contentDescription = null)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 用户名
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = onUsernameChange,
+                    label = { Text("用户名") },
+                    leadingIcon = {
+                        Icon(Icons.Outlined.Person, contentDescription = null)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 密码
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = onPasswordChange,
+                    label = { Text("密码") },
+                    leadingIcon = {
+                        Icon(Icons.Outlined.Lock, contentDescription = null)
+                    },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                
+                // 提示信息
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "💡 服务器地址需要包含完整的URL和端口号",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                // 同步结果
+                if (syncResult != null) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (syncResult.contains("成功")) 
+                                MaterialTheme.colorScheme.primaryContainer 
+                            else MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Text(
+                            text = syncResult,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // 按钮
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("取消")
+                    }
+                    Button(
+                        onClick = onSave,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("保存并测试")
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun SettingsSection(title: String) {
     Text(
@@ -280,7 +569,6 @@ fun SettingsSection(title: String) {
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingItem(
     title: String,
@@ -344,7 +632,6 @@ fun SettingItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SwitchSettingItem(
     title: String,
@@ -385,7 +672,6 @@ fun SwitchSettingItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClickableSettingItem(
     title: String,
@@ -420,7 +706,6 @@ fun ClickableSettingItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NumberSettingItem(
     title: String,
@@ -463,7 +748,6 @@ fun NumberSettingItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThemeSelector(
     selectedTheme: String,
@@ -545,4 +829,3 @@ fun TimePickerDialog(
         }
     }
 }
-
