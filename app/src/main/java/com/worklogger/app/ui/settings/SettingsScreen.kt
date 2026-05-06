@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.app.Activity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -473,7 +474,7 @@ fun SettingsScreen(
                         downloadState = uiState.downloadState,
                         onDismiss = { viewModel.clearUpdateCheckResult() },
                         onUpdate = {
-                            val activity = LocalContext.current as? android.app.Activity
+                            val activity = LocalContext.current as Activity
                             activity?.let { viewModel.downloadAndInstallUpdate(it) }
                         }
                     )
