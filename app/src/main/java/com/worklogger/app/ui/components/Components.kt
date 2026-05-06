@@ -125,7 +125,7 @@ fun WorkRecordCard(
             if (!record.isDeleted) {
                 IconButton(onClick = onDelete) {
                     Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Outlined.Delete,
+                        imageVector = Icons.Default.Delete,
                         contentDescription = "删除",
                         tint = MaterialTheme.colorScheme.error
                     )
@@ -222,7 +222,7 @@ fun ProgressBar(
         Spacer(modifier = Modifier.height(8.dp))
         
         LinearProgressIndicator(
-            progress = { progress.coerceIn(0f, 1f) },
+            progress = progress.coerceIn(0f, 1f),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
@@ -241,7 +241,7 @@ fun EmptyState(
     message: String,
     icon: @Composable () -> Unit = {
         Icon(
-            imageVector = androidx.compose.material.icons.Icons.Outlined.Inbox,
+            imageVector = Icons.Default.Inbox,
             contentDescription = null,
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -319,7 +319,7 @@ fun MissedDayChip(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = androidx.compose.material.icons.Icons.Outlined.Warning,
+                imageVector = Icons.Default.Warning,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.error
