@@ -22,6 +22,7 @@ import androidx.compose.ui.window.Dialog
 import com.worklogger.app.BuildConfig
 import com.worklogger.app.ui.components.ConfirmDialog
 import com.worklogger.app.utils.DownloadState
+import com.worklogger.app.utils.ReleaseInfo
 import java.text.SimpleDateFormat
 import java.util.*
 
