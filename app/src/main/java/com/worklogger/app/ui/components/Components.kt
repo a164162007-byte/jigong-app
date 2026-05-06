@@ -5,10 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Inbox
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -80,6 +76,22 @@ fun WorkRecordCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    // 加班标记 - 明显显示
+                    if (record.isOvertime) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = RecordOvertime.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = "加班 ⏰",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = RecordOvertime,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
                 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -129,7 +141,7 @@ fun WorkRecordCard(
             if (!record.isDeleted) {
                 IconButton(onClick = onDelete) {
                     Icon(
-                        imageVector = Icons.Default.Delete,
+                        imageVector = androidx.compose.material.icons.Icons.Outlined.Delete,
                         contentDescription = "删除",
                         tint = MaterialTheme.colorScheme.error
                     )
@@ -226,7 +238,7 @@ fun ProgressBar(
         Spacer(modifier = Modifier.height(8.dp))
         
         LinearProgressIndicator(
-            progress = progress.coerceIn(0f, 1f),
+            progress = { progress.coerceIn(0f, 1f) },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
@@ -245,7 +257,7 @@ fun EmptyState(
     message: String,
     icon: @Composable () -> Unit = {
         Icon(
-            imageVector = Icons.Default.Inbox,
+            imageVector = androidx.compose.material.icons.Icons.Outlined.Inbox,
             contentDescription = null,
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -323,7 +335,7 @@ fun MissedDayChip(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Warning,
+                imageVector = androidx.compose.material.icons.Icons.Outlined.Warning,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.error
