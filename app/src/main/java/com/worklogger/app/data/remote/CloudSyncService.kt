@@ -204,6 +204,55 @@ class CloudSyncService {
     }
     
     /**
+     * 下载云端数据到本地
+     * 返回云端有但本地没有的记录列表
+     */
+    suspend fun downloadData(
+        serverUrl: String,
+        username: String,
+        password: String,
+        localRecords: List<WorkRecord>
+    ): Result<List<CloudWorkRecord>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                // 1. 获取云端所有记录
+                val cloudResult = fetchRecords(serverUrl, username, password)
+                if (cloudResult.isFailure) {
+                    return@withContext Result.failure(
+                        cloudResult.exceptionOrNull() ?: IOException("获取云端数据失败")
+                    )
+                }
+                val cloudRecords = cloudResult.getOrNull() ?: emptyList()
+                
+                // 2. 找出云端有但本地没有的记录
+                val localDates = localRecords.map { it.date }.toSet()
+                val recordsToDownload = cloudRecords.filter { it.date !in localDates }
+                
+                Result.success(recordsToDownload)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+    
+    /**
+     * 将CloudWorkRecord转换为WorkRecord
+     */
+    fun cloudRecordToWorkRecord(cloudRecord: CloudWorkRecord): WorkRecord {
+        return WorkRecord(
+            date = cloudRecord.date,
+            hours = cloudRecord.hours,
+            isOvertime = cloudRecord.isOvertime,
+            location = cloudRecord.location,
+            remark = cloudRecord.remark,
+            mealSubsidy = cloudRecord.mealSubsidy,
+            isManual = cloudRecord.isManual,
+            createdAt = cloudRecord.createdAt,
+            updatedAt = cloudRecord.updatedAt
+        )
+    }
+    
+    /**
      * 构建API URL
      */
     private fun buildUrl(baseUrl: String, path: String): String {
