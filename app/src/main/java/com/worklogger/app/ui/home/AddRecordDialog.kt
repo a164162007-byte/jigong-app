@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Note
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +37,7 @@ fun AddRecordDialog(
     var selectedDate by remember { mutableStateOf(record?.date ?: DateUtils.today()) }
     var hours by remember { mutableStateOf(record?.hours?.toString() ?: "8") }
     var location by remember { mutableStateOf(record?.location ?: "") }
+    var locationError by remember { mutableStateOf(false) } // 地点错误状态
     var remark by remember { mutableStateOf(record?.remark ?: "") }
     var mealSubsidy by remember { mutableStateOf(record?.mealSubsidy ?: false) }
     var isManual by remember { mutableStateOf(record?.isManual ?: false) }
@@ -60,6 +62,7 @@ fun AddRecordDialog(
                     .verticalScroll(rememberScrollState())
                     .padding(24.dp)
             ) {
+                // 标题
                 Text(
                     text = if (record != null) "编辑记录" else "添加记录",
                     style = MaterialTheme.typography.titleLarge,
@@ -124,11 +127,14 @@ fun AddRecordDialog(
                             isOvertime = !isOvertime
                             if (isOvertime) isManual = false
                         },
-                        label = { Text("加班") },
+                        label = { Text("加班 ⏰") }, // 增强加班标记：添加时钟emoji
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = RecordOvertime.copy(alpha = 0.2f),
+                            selectedContainerColor = RecordOvertime.copy(alpha = 0.3f),
                             selectedLabelColor = RecordOvertime
-                        )
+                        ),
+                        leadingIcon = if (isOvertime) {
+                            { Icon(Icons.Outlined.Warning, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        } else null
                     )
                     FilterChip(
                         selected = isManual,
@@ -146,30 +152,34 @@ fun AddRecordDialog(
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // 加班快捷选择
-                if (isOvertime) {
-                    Text(
-                        text = "加班时长",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val overtimeOptions = listOf(0.5, 1.0, 1.5, 2.0, 3.0, 4.0)
-                        items(overtimeOptions) { option ->
-                            FilterChip(
-                                selected = hours.toDoubleOrNull() == option,
-                                onClick = { hours = option.toString() },
-                                label = { Text("${option}小时") }
-                            )
-                        }
+                // 加班快捷选择 - 自定义记工时长
+                Text(
+                    text = "自定义工时",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // 自定义工时选项
+                    val hourOptions = if (isOvertime) {
+                        listOf(0.5, 1.0, 1.5, 2.0, 3.0, 4.0) // 加班快捷选项
+                    } else {
+                        listOf(4.0, 6.0, 8.0, 10.0, 12.0) // 标准工快捷选项
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
+                    items(hourOptions) { option ->
+                        FilterChip(
+                            selected = hours.toDoubleOrNull() == option,
+                            onClick = { hours = option.toString() },
+                            label = { Text("${option}小时") }
+                        )
+                    }
                 }
                 
-                // 地点输入
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 地点输入 - 强制输入
                 ExposedDropdownMenuBox(
                     expanded = showLocationDropdown && recentLocations.isNotEmpty(),
                     onExpandedChange = { showLocationDropdown = it }
@@ -178,9 +188,14 @@ fun AddRecordDialog(
                         value = location,
                         onValueChange = {
                             location = it
+                            locationError = false // 输入时清除错误
                             showLocationDropdown = true
                         },
-                        label = { Text("地点") },
+                        label = { Text("工地名称 *") }, // 标注必填
+                        isError = locationError, // 显示错误状态
+                        supportingText = if (locationError) {
+                            { Text("请输入工地名称", color = MaterialTheme.colorScheme.error) }
+                        } else null,
                         trailingIcon = {
                             ExposedDropdownMenuDefaults.TrailingIcon(expanded = showLocationDropdown)
                         },
@@ -202,6 +217,7 @@ fun AddRecordDialog(
                                     text = { Text(loc) },
                                     onClick = {
                                         location = loc
+                                        locationError = false
                                         showLocationDropdown = false
                                     }
                                 )
@@ -257,12 +273,18 @@ fun AddRecordDialog(
                     }
                     Button(
                         onClick = {
+                            // 验证地点是否为空
+                            if (location.isBlank()) {
+                                locationError = true
+                                return@Button
+                            }
+                            
                             val hoursValue = hours.toDoubleOrNull() ?: 8.0
                             onSave(
                                 selectedDate,
                                 hoursValue,
                                 isOvertime,
-                                location,
+                                location.trim(),
                                 remark,
                                 mealSubsidy,
                                 isManual
