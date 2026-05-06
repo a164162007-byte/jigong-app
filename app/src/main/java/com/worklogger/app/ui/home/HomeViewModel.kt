@@ -239,13 +239,14 @@ class HomeViewModel(
             val today = DateUtils.today()
             val settings = _uiState.value.settings
             
+            // 一键记工：标准工（标准工时），自动设置饭补，工地名称可选
             val record = WorkRecord(
                 date = today,
                 hours = settings.dailyWorkHours,
                 isOvertime = false,
                 location = "",
                 remark = "",
-                mealSubsidy = false,
+                mealSubsidy = true,  // 标准工自动有饭补
                 isManual = false
             )
             
