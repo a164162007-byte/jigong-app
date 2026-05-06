@@ -31,13 +31,15 @@ import java.util.*
 fun AddRecordDialog(
     record: WorkRecord? = null,
     recentLocations: List<String> = emptyList(),
+    requireLocation: Boolean = true,  // 一键记工不需要工地名称，手动记工需要
     onDismiss: () -> Unit,
     onSave: (date: String, hours: Double, isOvertime: Boolean, location: String, remark: String, mealSubsidy: Boolean, isManual: Boolean) -> Unit
 ) {
+    // 根据requireLocation初始化locationError
+    var locationError by remember { mutableStateOf(requireLocation) }
     var selectedDate by remember { mutableStateOf(record?.date ?: DateUtils.today()) }
     var hours by remember { mutableStateOf(record?.hours?.toString() ?: "8") }
     var location by remember { mutableStateOf(record?.location ?: "") }
-    var locationError by remember { mutableStateOf(false) } // 地点错误状态
     var remark by remember { mutableStateOf(record?.remark ?: "") }
     var mealSubsidy by remember { mutableStateOf(record?.mealSubsidy ?: false) }
     var isManual by remember { mutableStateOf(record?.isManual ?: false) }
@@ -191,7 +193,7 @@ fun AddRecordDialog(
                             locationError = false // 输入时清除错误
                             showLocationDropdown = true
                         },
-                        label = { Text("工地名称 *") }, // 标注必填
+                        label = { Text(if (requireLocation) "工地名称 *" else "工地名称") }, // 必填标记
                         isError = locationError, // 显示错误状态
                         supportingText = if (locationError) {
                             { Text("请输入工地名称", color = MaterialTheme.colorScheme.error) }
@@ -273,8 +275,8 @@ fun AddRecordDialog(
                     }
                     Button(
                         onClick = {
-                            // 验证地点是否为空
-                            if (location.isBlank()) {
+                            // 验证地点是否为空（根据requireLocation决定是否必填）
+                            if (requireLocation && location.isBlank()) {
                                 locationError = true
                                 return@Button
                             }
