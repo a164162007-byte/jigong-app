@@ -256,7 +256,7 @@ fun RecordDetailDialog(
                 records.forEach { record ->
                     RecordDetailItem(record)
                     if (record != records.last()) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
                     }
                 }
                 
