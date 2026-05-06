@@ -37,14 +37,3 @@ class ReminderReceiver : BroadcastReceiver() {
         }
     }
 }
-
-/**
- * 开机广播接收器 - 重新设置提醒
- */
-class BootReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            // 重新设置提醒将在应用启动时处理
-        }
-    }
-}
