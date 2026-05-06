@@ -1,5 +1,6 @@
 package com.worklogger.app.ui.settings
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
@@ -11,7 +12,11 @@ import com.worklogger.app.data.repository.WorkRepository
 import com.worklogger.app.model.QuickPhrase
 import com.worklogger.app.model.UserSettings
 import com.worklogger.app.model.WorkRecord
+import com.worklogger.app.utils.DownloadState
 import com.worklogger.app.utils.ExcelExporter
+import com.worklogger.app.utils.ReleaseInfo
+import com.worklogger.app.utils.UpdateChecker
+import com.worklogger.app.utils.UpdateDownloader
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -32,8 +37,19 @@ data class SettingsUiState(
     val cloudServerUrlInput: String = "",
     val cloudUsernameInput: String = "",
     val cloudPasswordInput: String = "",
-    val showCloudConfigDialog: Boolean = false
+    val showCloudConfigDialog: Boolean = false,
+    // 应用更新状态
+    val isCheckingUpdate: Boolean = false,
+    val updateCheckResult: UpdateCheckResult? = null,
+    val downloadState: DownloadState = DownloadState.Idle,
+    val releaseInfo: ReleaseInfo? = null
 )
+
+sealed class UpdateCheckResult {
+    object NoUpdate : UpdateCheckResult()
+    data class UpdateAvailable(val info: ReleaseInfo) : UpdateCheckResult()
+    data class Error(val message: String) : UpdateCheckResult()
+}
 
 class SettingsViewModel(
     private val context: Context,
@@ -47,8 +63,106 @@ class SettingsViewModel(
     // 云同步服务
     private val cloudSyncService = CloudSyncService()
     
+    // 更新检查器和下载器
+    private val updateChecker = UpdateChecker()
+    private val updateDownloader = UpdateDownloader(context)
+    
     init {
         loadData()
+        // 收集下载状态
+        viewModelScope.launch {
+            updateDownloader.downloadState.collect { state ->
+                _uiState.update { it.copy(downloadState = state) }
+            }
+        }
+    }
+    
+    /**
+     * 检查应用更新
+     */
+    fun checkForUpdate() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCheckingUpdate = true, updateCheckResult = null) }
+            
+            val result = updateChecker.checkForUpdate()
+            
+            result.fold(
+                onSuccess = { releaseInfo ->
+                    val currentVersion = updateChecker.getCurrentVersion().first
+                    val isUpdateAvailable = releaseInfo.isNewerThan(currentVersion)
+                    
+                    if (isUpdateAvailable) {
+                        _uiState.update { 
+                            it.copy(
+                                isCheckingUpdate = false,
+                                updateCheckResult = UpdateCheckResult.UpdateAvailable(releaseInfo),
+                                releaseInfo = releaseInfo
+                            ) 
+                        }
+                    } else {
+                        _uiState.update { 
+                            it.copy(
+                                isCheckingUpdate = false,
+                                updateCheckResult = UpdateCheckResult.NoUpdate
+                            ) 
+                        }
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { 
+                        it.copy(
+                            isCheckingUpdate = false,
+                            updateCheckResult = UpdateCheckResult.Error(error.message ?: "检查更新失败")
+                        ) 
+                    }
+                }
+            )
+        }
+    }
+    
+    /**
+     * 下载并安装更新
+     * @param activity 用于启动安装界面的 Activity
+     */
+    fun downloadAndInstallUpdate(activity: Activity) {
+        val releaseInfo = _uiState.value.releaseInfo ?: return
+        
+        viewModelScope.launch {
+            val result = updateDownloader.downloadApk(
+                downloadUrl = releaseInfo.downloadUrl,
+                fileName = "jigong-${releaseInfo.versionName}.apk"
+            )
+            
+            result.fold(
+                onSuccess = { apkFile ->
+                    updateDownloader.installApk(activity, apkFile)
+                },
+                onFailure = { error ->
+                    // 错误已在 downloadApk 中处理
+                }
+            )
+        }
+    }
+    
+    /**
+     * 获取当前版本信息
+     */
+    fun getCurrentVersion(): Pair<String, Int> {
+        return updateChecker.getCurrentVersion()
+    }
+    
+    /**
+     * 清除更新检查结果
+     */
+    fun clearUpdateCheckResult() {
+        _uiState.update { it.copy(updateCheckResult = null) }
+    }
+    
+    /**
+     * 重置下载状态
+     */
+    fun resetDownloadState() {
+        updateDownloader.resetState()
     }
     
     private fun loadData() {
