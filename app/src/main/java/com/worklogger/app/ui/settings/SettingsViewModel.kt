@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.worklogger.app.data.remote.CloudSyncService
 import com.worklogger.app.data.repository.SettingsRepository
 import com.worklogger.app.data.repository.WorkRepository
 import com.worklogger.app.model.QuickPhrase
@@ -14,6 +15,8 @@ import com.worklogger.app.utils.ExcelExporter
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
 
 data class SettingsUiState(
     val settings: UserSettings = UserSettings(),
@@ -22,7 +25,14 @@ data class SettingsUiState(
     val showClearConfirm: Boolean = false,
     val showImportDialog: Boolean = false,
     val exportResult: String? = null,
-    val isExporting: Boolean = false
+    val isExporting: Boolean = false,
+    // 云同步状态
+    val isSyncing: Boolean = false,
+    val syncResult: String? = null,
+    val cloudServerUrlInput: String = "",
+    val cloudUsernameInput: String = "",
+    val cloudPasswordInput: String = "",
+    val showCloudConfigDialog: Boolean = false
 )
 
 class SettingsViewModel(
@@ -34,6 +44,9 @@ class SettingsViewModel(
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
     
+    // 云同步服务
+    private val cloudSyncService = CloudSyncService()
+    
     init {
         loadData()
     }
@@ -41,7 +54,15 @@ class SettingsViewModel(
     private fun loadData() {
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
-                _uiState.update { it.copy(settings = settings, isLoading = false) }
+                _uiState.update { 
+                    it.copy(
+                        settings = settings, 
+                        isLoading = false,
+                        cloudServerUrlInput = settings.cloudServerUrl,
+                        cloudUsernameInput = settings.cloudUsername,
+                        cloudPasswordInput = settings.cloudPassword
+                    ) 
+                }
             }
         }
         
@@ -110,6 +131,120 @@ class SettingsViewModel(
         viewModelScope.launch {
             settingsRepository.updateBiometricEnabled(enabled)
         }
+    }
+    
+    // 云同步配置方法
+    fun showCloudConfigDialog() {
+        val settings = _uiState.value.settings
+        _uiState.update { 
+            it.copy(
+                showCloudConfigDialog = true,
+                cloudServerUrlInput = settings.cloudServerUrl,
+                cloudUsernameInput = settings.cloudUsername,
+                cloudPasswordInput = settings.cloudPassword
+            ) 
+        }
+    }
+    
+    fun hideCloudConfigDialog() {
+        _uiState.update { it.copy(showCloudConfigDialog = false) }
+    }
+    
+    fun updateCloudServerUrl(url: String) {
+        _uiState.update { it.copy(cloudServerUrlInput = url) }
+    }
+    
+    fun updateCloudUsername(username: String) {
+        _uiState.update { it.copy(cloudUsernameInput = username) }
+    }
+    
+    fun updateCloudPassword(password: String) {
+        _uiState.update { it.copy(cloudPasswordInput = password) }
+    }
+    
+    fun saveCloudConfig() {
+        viewModelScope.launch {
+            val url = _uiState.value.cloudServerUrlInput.trim()
+            val username = _uiState.value.cloudUsernameInput.trim()
+            val password = _uiState.value.cloudPasswordInput
+            
+            // 保存配置
+            settingsRepository.updateCloudServerUrl(url)
+            settingsRepository.updateCloudUsername(username)
+            settingsRepository.updateCloudPassword(password)
+            
+            // 测试连接
+            val success = cloudSyncService.testConnection(url, username, password)
+            if (success) {
+                _uiState.update { 
+                    it.copy(
+                        showCloudConfigDialog = false,
+                        syncResult = "连接成功！配置已保存。"
+                    ) 
+                }
+            } else {
+                _uiState.update { 
+                    it.copy(
+                        showCloudConfigDialog = true,
+                        syncResult = "连接失败，请检查服务器地址和账号密码是否正确"
+                    ) 
+                }
+            }
+        }
+    }
+    
+    fun toggleCloudSync(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.updateCloudSyncEnabled(enabled)
+        }
+    }
+    
+    fun syncToCloud() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSyncing = true) }
+            
+            val settings = _uiState.value.settings
+            if (settings.cloudServerUrl.isBlank() || settings.cloudUsername.isBlank()) {
+                _uiState.update { 
+                    it.copy(isSyncing = false, syncResult = "请先配置云服务器信息") 
+                }
+                return@launch
+            }
+            
+            // 获取本地所有记录
+            val localRecords = workRepository.getAllRecordsSync()
+            
+            // 执行同步
+            val result = cloudSyncService.syncData(
+                serverUrl = settings.cloudServerUrl,
+                username = settings.cloudUsername,
+                password = settings.cloudPassword,
+                localRecords = localRecords
+            )
+            
+            if (result.success) {
+                // 更新最后同步时间
+                settingsRepository.updateCloudLastSyncTime(System.currentTimeMillis())
+                
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                val syncTime = dateFormat.format(Date())
+                
+                _uiState.update { 
+                    it.copy(
+                        isSyncing = false,
+                        syncResult = "同步成功！\n上传: ${result.uploadedCount}条\n下载: ${result.downloadedCount}条\n同步时间: $syncTime"
+                    ) 
+                }
+            } else {
+                _uiState.update { 
+                    it.copy(isSyncing = false, syncResult = "同步失败: ${result.message}") 
+                }
+            }
+        }
+    }
+    
+    fun clearSyncResult() {
+        _uiState.update { it.copy(syncResult = null) }
     }
     
     fun addPhrase(phrase: String) {
