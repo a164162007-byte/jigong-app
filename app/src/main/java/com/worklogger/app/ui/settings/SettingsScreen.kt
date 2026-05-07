@@ -112,13 +112,13 @@ fun SettingsScreen(
                 NumberSettingItem(
                     title = "月工时目标",
                     subtitle = "本月要达到的工时",
-                    value = uiState.settings.monthlyHoursTarget,
-                    onValueChange = { viewModel.updateMonthlyHoursTarget(it) },
+                    value = uiState.settings.monthTarget,
+                    onValueChange = { viewModel.updateMonthTarget(it) },
                     suffix = "小时"
                 )
             }
             
-            HorizontalDivider()
+            Divider()
             
             // 数据管理区域
             SettingsSection(title = "数据管理") {
@@ -154,7 +154,7 @@ fun SettingsScreen(
                 )
             }
             
-            HorizontalDivider()
+            Divider()
             
             // 云同步区域
             SettingsSection(title = "云同步") {
@@ -205,7 +205,7 @@ fun SettingsScreen(
                 )
             }
             
-            HorizontalDivider()
+            Divider()
             
             // 系统区域
             SettingsSection(title = "系统") {
