@@ -675,7 +675,7 @@ class SettingsViewModel(
     
     fun updatePhrase(phrase: QuickPhrase, newText: String) {
         viewModelScope.launch {
-            workRepository.updatePhrase(phrase.copy(phrase = newText))
+            workRepository.updatePhrase(phrase, newText)
         }
     }
 }
