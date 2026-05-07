@@ -135,8 +135,8 @@ class WorkRepository(
         return records.filter { it.isOvertime }.sumOf { it.hours }
     }
     
-    suspend fun getMeanSubsidyCount(records: List<WorkRecord>): Int {
-        return records.count { !it.isOvertime && !it.isManual && it.meanSubsidy }
+    suspend fun getMealSubsidyCount(records: List<WorkRecord>): Int {
+        return records.count { !it.isOvertime && !it.isManual && it.mealSubsidy }
     }
     
     suspend fun getTotalHours(records: List<WorkRecord>): Double {
