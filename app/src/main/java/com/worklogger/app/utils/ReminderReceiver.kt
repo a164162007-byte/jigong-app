@@ -28,7 +28,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 // 检查是否今天还没记工
                 CoroutineScope(Dispatchers.IO).launch {
                     val db = com.worklogger.app.data.local.AppDatabase.getInstance(context)
-                    val records = db.workRecordDao().getRecordsByDateSync(DateUtils.today())
+                    val records = db.workRecordDao().getRecordsByDate(DateUtils.today())
                     if (records.isEmpty()) {
                         helper.showMissedDayReminder()
                     }
