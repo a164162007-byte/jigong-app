@@ -12,8 +12,8 @@ android {
         applicationId "com.worklogger.app"
         minSdk 26
         targetSdk 34
-        versionCode 1190
-        versionName "1.19.0"
+        versionCode 2110
+        versionName "2.1.1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -118,4 +118,3 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }
-
