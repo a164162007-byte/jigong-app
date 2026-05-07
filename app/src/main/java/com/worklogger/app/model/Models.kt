@@ -1,5 +1,6 @@
 package com.worklogger.app.model
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -19,7 +20,9 @@ data class WorkRecord(
     val isManual: Boolean,      // 是否手动折算
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "is_deleted")
     val isDeleted: Boolean = false,
+    @ColumnInfo(name = "deleted_at")
     val deletedAt: Long? = null
 )
 
