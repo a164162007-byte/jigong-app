@@ -67,7 +67,7 @@ class TrashViewModel(
     fun confirmPermanentDelete() {
         viewModelScope.launch {
             _uiState.value.deleteRecordId?.let { id ->
-                workRepository.permanentDeleteById(id)
+                workRepository.permanentlyDeleteById(id)
             }
             _uiState.update { it.copy(showDeleteConfirm = false, deleteRecordId = null) }
         }
@@ -84,7 +84,7 @@ class TrashViewModel(
     fun permanentDeleteAll() {
         viewModelScope.launch {
             _uiState.value.deletedRecords.forEach { record ->
-                workRepository.permanentDeleteById(record.id)
+                workRepository.permanentlyDeleteById(record.id)
             }
             _uiState.update { it.copy(showPermanentDeleteConfirm = false) }
         }
