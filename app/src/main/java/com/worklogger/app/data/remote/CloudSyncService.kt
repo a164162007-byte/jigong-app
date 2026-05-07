@@ -1,38 +1,55 @@
 package com.worklogger.app.data.remote
 
 import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
 import com.worklogger.app.model.WorkRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.Credentials
+import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
  * 云同步服务
- * 用于与Docker部署的Web版记工App进行数据同步
- * 
- * 数据格式适配Web端：
- * - record_type: "standard" | "manual" | "overtime"
- * - work_date: "2026-05-07"
- * - meal_subsidy: 标准工自动推断为true
+ * 用于与Flask后端进行数据同步（Session-based认证）
+ * v2.1.3.0
  */
 class CloudSyncService {
-    
+
     private val gson = Gson()
-    
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
-        .followRedirects(false)  // 不跟随重定向
+        .followRedirects(true)
+        .cookieJar(SimpleCookieJar())
         .build()
-    
+
+    /**
+     * 简单的Cookie管理器，用于保存Session Cookie
+     */
+    private class SimpleCookieJar : okhttp3.CookieJar {
+        private val cookies: MutableList<okhttp3.Cookie> = mutableListOf()
+
+        override fun saveFromResponse(url: okhttp3.HttpUrl, cookies: List<okhttp3.Cookie>) {
+            this.cookies.clear()
+            this.cookies.addAll(cookies)
+        }
+
+        override fun loadForRequest(url: okhttp3.HttpUrl): List<okhttp3.Cookie> {
+            return cookies.filter { it.matches(url) }
+        }
+
+        fun clear() {
+            cookies.clear()
+        }
+    }
+
     /**
      * 同步结果
      */
@@ -40,73 +57,126 @@ class CloudSyncService {
         val success: Boolean,
         val message: String,
         val uploadedCount: Int = 0,
-        val downloadedCount: Int = 0
+        val downloadedCount: Int = 0,
+        val duplicateCount: Int = 0
     )
-    
+
     /**
-     * 云端记录数据格式 - 匹配Web端 /api/records 返回的格式
+     * 云端记录数据格式
      */
     data class CloudWorkRecord(
-        val id: Int? = null,
-        @SerializedName("user_id")
-        val userId: Int? = null,
-        @SerializedName("record_type")
-        val recordType: String,      // "standard", "manual", "overtime"
-        @SerializedName("work_date")
-        val workDate: String,        // "2026-05-07"
-        val location: String,
-        @SerializedName("start_time")
-        val startTime: String? = null,
-        @SerializedName("end_time")
-        val endTime: String? = null,
-        @SerializedName("morning_end_time")
-        val morningEndTime: String? = null,
-        @SerializedName("afternoon_start_time")
-        val afternoonStartTime: String? = null,
+        val date: String,
         val hours: Double,
-        @SerializedName("deleted_at")
-        val deletedAt: String? = null,
-        @SerializedName("created_at")
-        val createdAt: String? = null,
-        @SerializedName("updated_at")
-        val updatedAt: String? = null,
-        // App端特有字段，导出时使用
-        @SerializedName("meal_subsidy")
-        val mealSubsidy: Boolean? = null
+        val isOvertime: Boolean,
+        val location: String,
+        val remark: String,
+        val mealSubsidy: Boolean,
+        val isManual: Boolean,
+        val createdAt: Long,
+        val updatedAt: Long
     )
-    
+
     /**
-     * Web端API响应格式
+     * 登录响应
      */
-    data class ApiResponse<T>(
+    data class LoginResponse(
         val success: Boolean,
         val message: String? = null,
-        val data: T? = null
+        val need_login: Boolean? = null
     )
-    
+
     /**
-     * 测试服务器连接
-     * 调用 /api/health 接口，无需认证
+     * 记录API响应
      */
-    suspend fun testConnection(serverUrl: String): Boolean {
+    data class RecordsResponse(
+        val success: Boolean,
+        val data: List<CloudWorkRecord>? = null,
+        val message: String? = null
+    )
+
+    /**
+     * 单条记录上传响应
+     */
+    data class UploadResponse(
+        val success: Boolean,
+        val duplicate: Boolean? = false,
+        val message: String? = null
+    )
+
+    /**
+     * 设置API响应
+     */
+    data class SettingsResponse(
+        val success: Boolean,
+        val data: Map<String, Any>? = null,
+        val message: String? = null
+    )
+
+    /**
+     * 登录并获取Session Cookie
+     */
+    private suspend fun login(serverUrl: String, username: String, password: String): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
-                val url = buildUrl(serverUrl, "api/health")
+                (client.cookieJar as SimpleCookieJar).clear()
+
+                val url = buildUrl(serverUrl, "login")
+                val formBody = FormBody.Builder()
+                    .add("username", username)
+                    .add("password", password)
+                    .build()
+
                 val request = Request.Builder()
                     .url(url)
-                    .get()
+                    .post(formBody)
                     .build()
+
                 val response = client.newCall(request).execute()
-                response.isSuccessful
+
+                // 检查是否有need_login字段（可能在重定向后的页面中）
+                val body = response.body?.string() ?: ""
+                if (body.contains("need_login", ignoreCase = true)) {
+                    return@withContext Result.failure(IOException("登录失败: 需要重新登录"))
+                }
+
+                if (!response.isSuccessful && response.code != 302) {
+                    return@withContext Result.failure(IOException("HTTP ${response.code}: ${response.message}"))
+                }
+
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    /**
+     * 测试服务器连接
+     */
+    suspend fun testConnection(serverUrl: String, username: String, password: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                // 先登录
+                val loginResult = login(serverUrl, username, password)
+                if (loginResult.isFailure) {
+                    return@withContext false
+                }
+
+                // 尝试访问version或直接验证登录状态
+                val url = buildUrl(serverUrl, "api/version")
+                val request = Request.Builder().url(url).get().build()
+                val response = client.newCall(request).execute()
+
+                // 如果能成功访问或302重定向到登录页也算连接成功（至少服务可用）
+                response.isSuccessful || response.code == 302
             } catch (e: Exception) {
                 false
             }
         }
     }
-    
+
     /**
      * 从云端获取所有记录
-     * 调用 GET /api/records，使用 Basic Auth 认证
      */
     suspend fun fetchRecords(
         serverUrl: String,
@@ -115,285 +185,60 @@ class CloudSyncService {
     ): Result<List<CloudWorkRecord>> {
         return withContext(Dispatchers.IO) {
             try {
-                val url = buildUrl(serverUrl, "api/records")
-                val request = Request.Builder()
-                    .url(url)
-                    .header("Authorization", Credentials.basic(username, password))
-                    .get()
-                    .build()
-                
+                // 先登录
+                val loginResult = login(serverUrl, username, password)
+                if (loginResult.isFailure) {
+                    return@withContext Result.failure(loginResult.exceptionOrNull() ?: IOException("登录失败"))
+                }
+
+                // 使用大limit获取所有记录
+                val url = buildUrl(serverUrl, "api/records?limit=10000")
+                val request = Request.Builder().url(url).get().build()
                 val response = client.newCall(request).execute()
-                
-                // 检查认证失败
-                if (response.code == 401) {
-                    return@withContext Result.failure(IOException("认证失败，请检查用户名和密码"))
-                }
-                
-                if (response.code == 302) {
-                    return@withContext Result.failure(IOException("认证失败，需要登录"))
-                }
-                
+
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(IOException("HTTP ${response.code}: ${response.message}"))
                 }
-                
+
                 val body = response.body?.string() ?: return@withContext Result.failure(IOException("Empty response"))
-                
-                // 解析响应，Web端返回 {"success": true, "data": [...]}
-                val apiResponse = gson.fromJson(body, ApiResponse::class.java)
-                if (apiResponse?.success != true || apiResponse.data == null) {
-                    return@withContext Result.failure(IOException(apiResponse?.message ?: "获取数据失败"))
+                val responseData = gson.fromJson(body, RecordsResponse::class.java)
+
+                if (!responseData.success) {
+                    return@withContext Result.failure(IOException(responseData.message ?: "获取记录失败"))
                 }
-                
-                // data可能是列表或对象
-                val records = if (apiResponse.data is List<*>) {
-                    @Suppress("UNCHECKED_CAST")
-                    (apiResponse.data as List<Map<String, Any>>).map { map ->
-                        gson.fromJson(gson.toJson(map), CloudWorkRecord::class.java)
-                    }
-                } else {
-                    emptyList()
-                }
-                
-                Result.success(records)
+
+                Result.success(responseData.data ?: emptyList())
             } catch (e: Exception) {
                 Result.failure(e)
             }
         }
     }
-    
+
     /**
-     * 上传记录到云端
-     * 调用 POST /api/records
+     * 上传记录到云端（逐条上传）
      */
     suspend fun uploadRecords(
         serverUrl: String,
         username: String,
         password: String,
         records: List<WorkRecord>
-    ): Result<Int> {
+    ): Result<Pair<Int, Int>> { // Pair<成功数量, 重复数量>
         return withContext(Dispatchers.IO) {
             try {
+                // 先登录
+                val loginResult = login(serverUrl, username, password)
+                if (loginResult.isFailure) {
+                    return@withContext Result.failure(loginResult.exceptionOrNull() ?: IOException("登录失败"))
+                }
+
                 val url = buildUrl(serverUrl, "api/records")
-                
-                // 将WorkRecord转换为CloudWorkRecord
-                val cloudRecords = records.map { record ->
-                    CloudWorkRecord(
-                        recordType = when {
-                            record.isOvertime -> "overtime"
-                            record.isManual -> "manual"
-                            else -> "standard"
-                        },
-                        workDate = record.date,
-                        location = record.location,
-                        startTime = null,
-                        endTime = null,
-                        hours = record.hours,
-                        createdAt = null,
-                        updatedAt = null,
-                        mealSubsidy = record.mealSubsidy
-                    )
-                }
-                
-                val json = gson.toJson(cloudRecords)
                 val mediaType = "application/json; charset=utf-8".toMediaType()
-                val body = json.toRequestBody(mediaType)
-                
-                val request = Request.Builder()
-                    .url(url)
-                    .header("Authorization", Credentials.basic(username, password))
-                    .post(body)
-                    .build()
-                
-                val response = client.newCall(request).execute()
-                
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(IOException("HTTP ${response.code}: ${response.message}"))
-                }
-                
-                Result.success(records.size)
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-        }
-    }
-    
-    /**
-     * 同步数据（上传本地新增/修改，下载云端新增/修改）
-     */
-    suspend fun syncData(
-        serverUrl: String,
-        username: String,
-        password: String,
-        localRecords: List<WorkRecord>
-    ): SyncResult {
-        return withContext(Dispatchers.IO) {
-            try {
-                // 1. 先获取云端所有记录
-                val cloudResult = fetchRecords(serverUrl, username, password)
-                if (cloudResult.isFailure) {
-                    return@withContext SyncResult(
-                        success = false,
-                        message = "获取云端数据失败: ${cloudResult.exceptionOrNull()?.message}"
-                    )
-                }
-                val cloudRecords = cloudResult.getOrNull() ?: emptyList()
-                
-                // 2. 找出本地需要上传的记录（云端没有的）
-                val cloudKeys = cloudRecords.map { "${it.workDate}_${it.recordType}" }.toSet()
-                val recordsToUpload = localRecords.filter { record ->
-                    val key = "${record.date}_${getRecordType(record)}"
-                    key !in cloudKeys
-                }
-                
-                // 3. 上传本地新记录
-                var uploadedCount = 0
-                if (recordsToUpload.isNotEmpty()) {
-                    val uploadResult = uploadRecords(serverUrl, username, password, recordsToUpload)
-                    if (uploadResult.isSuccess) {
-                        uploadedCount = uploadResult.getOrNull() ?: 0
-                    } else {
-                        return@withContext SyncResult(
-                            success = false,
-                            message = "上传数据失败: ${uploadResult.exceptionOrNull()?.message}"
-                        )
-                    }
-                }
-                
-                // 4. 计算下载数量（云端有但本地没有的）
-                val localKeys = localRecords.map { "${it.date}_${getRecordType(it)}" }.toSet()
-                val downloadedCount = cloudRecords.count { cloud ->
-                    "${cloud.workDate}_${cloud.recordType}" !in localKeys
-                }
-                
-                SyncResult(
-                    success = true,
-                    message = "同步成功",
-                    uploadedCount = uploadedCount,
-                    downloadedCount = downloadedCount
-                )
-            } catch (e: Exception) {
-                SyncResult(
-                    success = false,
-                    message = "同步失败: ${e.message}"
-                )
-            }
-        }
-    }
-    
-    /**
-     * 下载云端数据到本地
-     * 返回云端有但本地没有的记录列表
-     */
-    suspend fun downloadData(
-        serverUrl: String,
-        username: String,
-        password: String,
-        localRecords: List<WorkRecord>
-    ): Result<List<WorkRecord>> {
-        return withContext(Dispatchers.IO) {
-            try {
-                // 1. 获取云端所有记录
-                val cloudResult = fetchRecords(serverUrl, username, password)
-                if (cloudResult.isFailure) {
-                    return@withContext Result.failure(
-                        cloudResult.exceptionOrNull() ?: IOException("获取云端数据失败")
-                    )
-                }
-                val cloudRecords = cloudResult.getOrNull() ?: emptyList()
-                
-                // 2. 找出云端有但本地没有的记录
-                val localKeys = localRecords.map { "${it.date}_${getRecordType(it)}" }.toSet()
-                val recordsToDownload = cloudRecords.filter { cloud ->
-                    "${cloud.workDate}_${cloud.recordType}" !in localKeys
-                }
-                
-                // 3. 转换为WorkRecord
-                val workRecords = recordsToDownload.map { cloud ->
-                    cloudRecordToWorkRecord(cloud)
-                }
-                
-                Result.success(workRecords)
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-        }
-    }
-    
-    /**
-     * 将CloudWorkRecord转换为WorkRecord
-     * 
-     * 字段映射：
-     * - work_date -> date
-     * - record_type -> isOvertime / isManual
-     * - hours -> hours
-     * - location -> location
-     * - meal_subsidy: Web端没有此字段，标准工自动推断为true
-     */
-    fun cloudRecordToWorkRecord(cloudRecord: CloudWorkRecord): WorkRecord {
-        val recordType = cloudRecord.recordType
-        // 标准工自动有饭补
-        val mealSubsidy = cloudRecord.mealSubsidy ?: (recordType == "standard")
-        
-        return WorkRecord(
-            date = cloudRecord.workDate,
-            hours = cloudRecord.hours,
-            isOvertime = recordType == "overtime",
-            location = cloudRecord.location,
-            remark = "",  // Web端没有备注字段
-            mealSubsidy = mealSubsidy,
-            isManual = recordType == "manual",
-            createdAt = parseIsoDateTime(cloudRecord.createdAt),
-            updatedAt = parseIsoDateTime(cloudRecord.updatedAt)
-        )
-    }
-    
-    /**
-     * 将WorkRecord转换为用于导出的Map格式
-     */
-    fun workRecordToExportMap(record: WorkRecord): Map<String, Any?> {
-        return mapOf(
-            "date" to record.date,
-            "record_type" to getRecordType(record),
-            "hours" to record.hours,
-            "location" to record.location,
-            "remark" to record.remark,
-            "meal_subsidy" to record.mealSubsidy,
-            "is_manual" to record.isManual,
-            "is_overtime" to record.isOvertime,
-            "created_at" to record.createdAt,
-            "updated_at" to record.updatedAt
-        )
-    }
-    
-    /**
-     * 获取记录类型字符串
-     */
-    private fun getRecordType(record: WorkRecord): String {
-        return when {
-            record.isOvertime -> "overtime"
-            record.isManual -> "manual"
-            else -> "standard"
-        }
-    }
-    
-    /**
-     * 解析ISO格式日期时间字符串为时间戳
-     */
-    private fun parseIsoDateTime(isoString: String?): Long {
-        if (isoString.isNullOrEmpty()) return System.currentTimeMillis()
-        return try {
-            java.time.Instant.parse(isoString).toEpochMilli()
-        } catch (e: Exception) {
-            System.currentTimeMillis()
-        }
-    }
-    
-    /**
-     * 构建API URL
-     */
-    private fun buildUrl(baseUrl: String, path: String): String {
-        val cleanUrl = baseUrl.trimEnd('/')
-        return "$cleanUrl/$path"
-    }
-}
+
+                var successCount = 0
+                var duplicateCount = 0
+
+                for (record in records) {
+                    val cloudRecord = CloudWorkRecord(
+                        date = record.date,
+                        hours = record.hours,
+                        isOvertime = record.isOverti
