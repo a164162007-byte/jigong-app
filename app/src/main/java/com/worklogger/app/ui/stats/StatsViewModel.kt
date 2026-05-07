@@ -71,59 +71,58 @@ class StatsViewModel(
         }
         
         val records = workRepository.getRecordsByDateRange(startDate, endDate)
-            val stats = StatsCalculator.calculateStats(
-                records,
-                settings.dailyWorkHours,
-                settings.overtimeRate,
-                settings.mealSubsidyStandard,
-                settings.dailyWage
+        val stats = StatsCalculator.calculateStats(
+            records,
+            settings.dailyWorkHours,
+            settings.overtimeRate,
+            settings.mealSubsidyStandard,
+            settings.dailyWage
+        )
+        
+        val overtimeDist = StatsCalculator.calculateOvertimeDistribution(
+            records,
+            settings.dailyWorkHours
+        )
+        
+        val (totalDays, totalHours) = StatsCalculator.calculateTotalOvertime(records)
+        
+        // 计算上月数据用于对比
+        val prevYearMonth = DateUtils.addMonths(state.selectedYearMonth, -1)
+        val prevStartDate = DateUtils.getYearMonthFirstDay(prevYearMonth)
+        val prevEndDate = DateUtils.getYearMonthLastDay(prevYearMonth)
+        
+        val allRecords = workRepository.getAllRecordsOnce()
+        val prevRecords = allRecords.filter { 
+            it.date >= prevStartDate && it.date <= prevEndDate 
+        }
+        val prevStats = StatsCalculator.calculateStats(
+            prevRecords,
+            settings.dailyWorkHours,
+            settings.overtimeRate,
+            settings.mealSubsidyStandard,
+            settings.dailyWage
+        )
+        
+        val comparison = StatsCalculator.calculateComparison(stats, prevStats)
+        
+        // 计算地点分布
+        val locationDist = records
+            .filter { !it.isOvertime }
+            .groupBy { it.location.ifEmpty { "未填写" } }
+            .mapValues { it.value.size }
+        
+        _uiState.update {
+            it.copy(
+                currentStats = stats,
+                previousStats = prevStats,
+                comparison = comparison,
+                overtimeDistribution = overtimeDist,
+                totalOvertimeDays = totalDays,
+                totalOvertimeHours = totalHours,
+                recentRecords = records,
+                locationDistribution = locationDist,
+                isLoading = false
             )
-            
-            val overtimeDist = StatsCalculator.calculateOvertimeDistribution(
-                records,
-                settings.dailyWorkHours
-            )
-            
-            val (totalDays, totalHours) = StatsCalculator.calculateTotalOvertime(records)
-            
-            // 计算上月数据用于对比
-            val prevYearMonth = DateUtils.addMonths(state.selectedYearMonth, -1)
-            val prevStartDate = DateUtils.getYearMonthFirstDay(prevYearMonth)
-            val prevEndDate = DateUtils.getYearMonthLastDay(prevYearMonth)
-            
-            val allRecords = workRepository.getAllRecordsOnce()
-            val prevRecords = allRecords.filter { 
-                it.date >= prevStartDate && it.date <= prevEndDate 
-            }
-            val prevStats = StatsCalculator.calculateStats(
-                prevRecords,
-                settings.dailyWorkHours,
-                settings.overtimeRate,
-                settings.mealSubsidyStandard,
-                settings.dailyWage
-            )
-            
-            val comparison = StatsCalculator.calculateComparison(stats, prevStats)
-            
-            // 计算地点分布
-            val locationDist = records
-                .filter { !it.isOvertime }
-                .groupBy { it.location.ifEmpty { "未填写" } }
-                .mapValues { it.value.size }
-            
-            _uiState.update {
-                it.copy(
-                    currentStats = stats,
-                    previousStats = prevStats,
-                    comparison = comparison,
-                    overtimeDistribution = overtimeDist,
-                    totalOvertimeDays = totalDays,
-                    totalOvertimeHours = totalHours,
-                    recentRecords = records,
-                    locationDistribution = locationDist,
-                    isLoading = false
-                )
-            }
         }
         
         // 加载近6个月趋势
