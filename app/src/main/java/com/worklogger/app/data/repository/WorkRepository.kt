@@ -6,6 +6,7 @@ import com.worklogger.app.model.QuickPhrase
 import com.worklogger.app.model.WorkRecord
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 class WorkRepository(
     private val workRecordDao: WorkRecordDao,
@@ -159,6 +160,10 @@ class WorkRepository(
 
     val recentLocations: Flow<List<String>> = allRecords.map { records ->
         records.map { it.location }.distinct().filter { it.isNotBlank() }.sorted()
+    }
+
+    suspend fun getAllLocationsOnce(): List<String> {
+        return workRecordDao.getAllLocations()
     }
     
     // 快捷短语
