@@ -6,9 +6,9 @@ import com.worklogger.app.model.WorkRecord
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface Dao {
+interface WorkRecordDao {
     
-    // ==================== WorkRecord 操作 ====================
+    // ====================== WorkRecord 操作 ====================
     
     @Query("SELECT * FROM work_records WHERE deleted_at IS NULL ORDER BY date DESC, id DESC")
     fun getAllRecords(): Flow<List<WorkRecord>>
@@ -57,8 +57,12 @@ interface Dao {
     
     @Query("DELETE FROM work_records WHERE deleted_at IS NOT NULL")
     suspend fun emptyTrash()
+}
+
+@Dao
+interface QuickPhraseDao {
     
-    // ==================== QuickPhrase 操作 ====================
+    // ====================== QuickPhrase 操作 ====================
     
     @Query("SELECT * FROM quick_phrases ORDER BY id DESC")
     fun getAllPhrases(): Flow<List<QuickPhrase>>
