@@ -224,9 +224,9 @@ class SettingsViewModel(
         }
     }
     
-    fun updateMonthlyHoursTarget(target: Double) {
+    fun updateMonthTarget(target: Double) {
         viewModelScope.launch {
-            settingsRepository.updateMonthlyHoursTarget(target)
+            settingsRepository.updateMonthTarget(target)
         }
     }
     
@@ -500,9 +500,9 @@ class SettingsViewModel(
                 val settingsMap = mapOf(
                     "daily_hours" to settings.dailyWorkHours,
                     "overtime_rate" to settings.overtimeRate,
-                    "meal_subsidy" to settings.mealSubsidy,
+                    "meal_subsidy" to settings.mealSubsidyStandard,
                     "daily_wage" to settings.dailyWage,
-                    "monthly_hours_target" to settings.monthlyHoursTarget
+                    "monthly_hours_target" to settings.monthTarget
                 )
                 
                 val result = dataExporter.exportToUri(records, uri, settingsMap)
@@ -663,7 +663,7 @@ class SettingsViewModel(
     fun addPhrase(text: String) {
         if (text.isBlank()) return
         viewModelScope.launch {
-            workRepository.addPhrase(QuickPhrase(text = text))
+            workRepository.addPhrase(QuickPhrase(phrase = text))
         }
     }
     
@@ -675,7 +675,7 @@ class SettingsViewModel(
     
     fun updatePhrase(phrase: QuickPhrase, newText: String) {
         viewModelScope.launch {
-            workRepository.updatePhrase(phrase.copy(text = newText))
+            workRepository.updatePhrase(phrase.copy(phrase = newText))
         }
     }
 }
