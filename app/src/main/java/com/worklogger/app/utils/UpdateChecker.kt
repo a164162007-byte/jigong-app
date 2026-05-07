@@ -27,8 +27,8 @@ class UpdateChecker {
     
     companion object {
         private const val GITHUB_API_URL = "https://api.github.com/repos/a164162007-byte/jigong-app/releases/latest"
-        private const val CURRENT_VERSION_NAME = "1.19.0"
-        private const val CURRENT_VERSION_CODE = 1190
+        private const val CURRENT_VERSION_NAME = "2.1.1.0"
+        private const val CURRENT_VERSION_CODE = 2110
     }
     
     private val client = OkHttpClient.Builder()
@@ -39,8 +39,8 @@ class UpdateChecker {
     private val gson = Gson()
     
     /**
-     * 检查是否有新版本
-     * @return ReleaseInfo? 如果有更新返回更新信息，否则返回 null
+     * 检查更新
+     * @return ReleaseInfo? 返回最新版本信息，如果请求失败返回 null
      */
     suspend fun checkForUpdate(): Result<ReleaseInfo> = withContext(Dispatchers.IO) {
         try {
@@ -53,12 +53,12 @@ class UpdateChecker {
             val response = client.newCall(request).execute()
             
             if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("检查更新失败: HTTP ${response.code}"))
+                return@withContext Result.failure(Exception("检查更新失败：HTTP ${response.code}"))
             }
             
             val body = response.body?.string()
             if (body.isNullOrEmpty()) {
-                return@withContext Result.failure(Exception("检查更新失败: 响应为空"))
+                return@withContext Result.failure(Exception("检查更新失败：响应为空"))
             }
             
             val json = gson.fromJson(body, JsonObject::class.java)
@@ -67,7 +67,7 @@ class UpdateChecker {
             val bodyContent = json.get("body")?.asString ?: "暂无更新说明"
             val assets = json.getAsJsonArray("assets")
             
-            // 提取版本号（去掉 v 前缀）
+            // 提取版本号
             val versionName = tagName.removePrefix("v")
             
             // 查找 APK 文件
@@ -82,21 +82,21 @@ class UpdateChecker {
                 }
             }
             
-            // 如果没找到 APK，从 HtmlUrl 获取
+            // 如果没有找到 APK，尝试从 HTML URL 构造
             if (downloadUrl == null) {
                 val htmlUrl = json.get("html_url")?.asString
                 if (htmlUrl != null) {
-                    // 从 Release 页面构建 APK 下载链接
+                    // 这是 Release 页面的 URL，需要构造 APK 下载地址
                     val repoUrl = "https://github.com/a164162007-byte/jigong-app/releases/download/$tagName"
                     downloadUrl = "$repoUrl/jigong-app-$versionName.apk"
                 }
             }
             
             if (downloadUrl == null) {
-                return@withContext Result.failure(Exception("未找到 APK 下载链接"))
+                return@withContext Result.failure(Exception("未找到 APK 文件，请前往 GitHub 下载"))
             }
             
-            // 计算新版本号（从版本名解析）
+            // 计算版本代码
             val newVersionCode = parseVersionCode(versionName)
             
             val releaseInfo = ReleaseInfo(
@@ -117,8 +117,8 @@ class UpdateChecker {
     }
     
     /**
-     * 比较版本号
-     * @return 正数表示 v1 > v2，0 表示相等，负数表示 v1 < v2
+     * 比较两个版本号的大小
+     * @return 正数表示 v1 > v2，负数表示 v1 < v2，0 表示相等
      */
     private fun compareVersions(v1: String, v2: String): Int {
         val version1 = v1.removePrefix("v").split(".").mapNotNull { it.toIntOrNull() }
@@ -139,7 +139,7 @@ class UpdateChecker {
     }
     
     /**
-     * 从版本名解析版本码
+     * 解析版本代码
      */
     private fun parseVersionCode(versionName: String): Int {
         val parts = versionName.removePrefix("v").split(".")
@@ -164,7 +164,7 @@ class UpdateChecker {
     }
     
     /**
-     * 检查是否需要更新
+     * 检查是否有可用更新
      */
     suspend fun isUpdateAvailable(): Boolean = withContext(Dispatchers.IO) {
         val result = checkForUpdate()
