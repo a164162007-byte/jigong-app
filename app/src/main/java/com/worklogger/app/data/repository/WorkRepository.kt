@@ -162,6 +162,10 @@ class WorkRepository(
         records.map { it.location }.distinct().filter { it.isNotBlank() }.sorted()
     }
 
+    
+    suspend fun getAllRecordsOnce(): List<WorkRecord> {
+        return workRecordDao.getAllRecordsOnce()
+    }
     suspend fun getAllLocationsOnce(): List<String> {
         return workRecordDao.getAllLocations()
     }
