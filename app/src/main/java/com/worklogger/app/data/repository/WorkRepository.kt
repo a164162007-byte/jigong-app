@@ -147,6 +147,16 @@ class WorkRepository(
         return workRecordDao.getAllLocations()
     }
     
+    
+    
+    suspend fun restoreFromTrashById(id: Int) {
+        workRecordDao.restoreFromTrash(id.toLong())
+    }
+    
+    suspend fun permanentlyDeleteById(id: Int) {
+        workRecordDao.permanentlyDelete(id.toLong())
+    }
+
     val recentLocations: Flow<List<String>> = allRecords.map { records ->
         records.map { it.location }.distinct().filter { it.isNotBlank() }.sorted()
     }
