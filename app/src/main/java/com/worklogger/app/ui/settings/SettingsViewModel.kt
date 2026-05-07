@@ -212,9 +212,9 @@ class SettingsViewModel(
         }
     }
     
-    fun updateMealSubsidy(subsidy: Double) {
+    fun updateMealSubsidyStandard(subsidy: Double) {
         viewModelScope.launch {
-            settingsRepository.updateMealSubsidy(subsidy)
+            settingsRepository.updateMealSubsidyStandard(subsidy)
         }
     }
     

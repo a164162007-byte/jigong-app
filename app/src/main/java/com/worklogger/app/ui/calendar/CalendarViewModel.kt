@@ -37,16 +37,14 @@ class CalendarViewModel(
         val endDate = DateUtils.getYearMonthLastDay(yearMonth)
         
         viewModelScope.launch {
-            workRepository.getRecordsByDateRange(startDate, endDate)
-                .collect { records ->
-                    val grouped = records.groupBy { it.date }
-                    _uiState.update {
-                        it.copy(
-                            recordsByDate = grouped,
-                            isLoading = false
-                        )
-                    }
-                }
+            val records = workRepository.getRecordsByDateRange(startDate, endDate)
+            val grouped = records.groupBy { it.date }
+            _uiState.update {
+                it.copy(
+                    recordsByDate = grouped,
+                    isLoading = false
+                )
+            }
         }
     }
     

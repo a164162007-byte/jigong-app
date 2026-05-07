@@ -107,19 +107,23 @@ class WorkRepository(
     
     // 回收站操作
     suspend fun moveToTrash(record: WorkRecord) {
-        workRecordDao.moveToTrash(record.id)
+        workRecordDao.moveToTrash(record.id.toLong())
     }
     
     suspend fun restoreFromTrash(record: WorkRecord) {
-        workRecordDao.restoreFromTrash(record.id)
+        workRecordDao.restoreFromTrash(record.id.toLong())
     }
     
     suspend fun permanentlyDelete(record: WorkRecord) {
-        workRecordDao.permanentlyDelete(record.id)
+        workRecordDao.permanentlyDelete(record.id.toLong())
     }
     
     suspend fun emptyTrash() {
         workRecordDao.emptyTrash()
+    }
+    
+    suspend fun softDeleteRecord(id: Long) {
+        workRecordDao.moveToTrash(id)
     }
     
     // 统计相关
@@ -143,6 +147,10 @@ class WorkRepository(
         return workRecordDao.getAllLocations()
     }
     
+    val recentLocations: Flow<List<String>> = allRecords.map { records ->
+        records.map { it.location }.distinct().filter { it.isNotBlank() }.sorted()
+    }
+    
     // 快捷短语
     suspend fun addPhrase(phrase: QuickPhrase) {
         quickPhraseDao.insertPhrase(phrase)
@@ -153,6 +161,6 @@ class WorkRepository(
     }
     
     suspend fun updatePhrase(phrase: QuickPhrase, newText: String) {
-        quickPhraseDao.updatePhrase(phrase.copy(text = newText))
+        quickPhraseDao.updatePhrase(phrase.copy(phrase = newText))
     }
 }

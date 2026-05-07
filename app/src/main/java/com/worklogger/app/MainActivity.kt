@@ -178,9 +178,9 @@ fun MainScreen(app: WorkLoggerApp) {
                     factory = SettingsViewModelFactory(app, app.workRepository, app.settingsRepository)
                 )
                 SettingsScreen(
-                    viewModel = viewModel,
-                    onNavigateToTrash = { navController.navigate("trash") },
-                    onNavigateToPhrases = { navController.navigate("phrases") }
+                    workRepository = app.workRepository,
+                    settingsRepository = app.settingsRepository,
+                    onExportExcel = { /* TODO: Implement Excel export */ }
                 )
             }
             

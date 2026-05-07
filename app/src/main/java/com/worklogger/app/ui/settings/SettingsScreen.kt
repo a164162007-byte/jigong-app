@@ -94,8 +94,8 @@ fun SettingsScreen(
                 NumberSettingItem(
                     title = "饭补金额",
                     subtitle = "标准工天 × 饭补 = 饭补总额",
-                    value = uiState.settings.mealSubsidy,
-                    onValueChange = { viewModel.updateMealSubsidy(it) },
+                    value = uiState.settings.mealSubsidyStandard,
+                    onValueChange = { viewModel.updateMealSubsidyStandard(it) },
                     prefix = "¥ ",
                     suffix = "元/天"
                 )

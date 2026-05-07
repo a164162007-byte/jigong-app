@@ -56,7 +56,7 @@ class HomeViewModel(
         
         viewModelScope.launch {
             // 收集最近地点
-            workRepository.getRecentLocations().collect { locations ->
+            workRepository.recentLocations.collect { locations ->
                 _uiState.update { it.copy(recentLocations = locations) }
             }
         }
@@ -67,41 +67,39 @@ class HomeViewModel(
         val startDate = DateUtils.getYearMonthFirstDay(currentMonth)
         val endDate = DateUtils.getYearMonthLastDay(currentMonth)
         
-        workRepository.getRecordsByDateRange(startDate, endDate)
-            .collect { records ->
-                val stats = StatsCalculator.calculateStats(
-                    records,
-                    settings.dailyWorkHours,
-                    settings.overtimeRate,
-                    settings.mealSubsidyStandard,
-                    settings.dailyWage
-                )
-                
-                val progress = StatsCalculator.calculateProgress(
-                    stats.totalStandard,
-                    settings.monthTarget
-                )
-                
-                // 计算总工时（标准+加班）
-                val totalHours = records.sumOf { it.hours }
-                
-                // 计算总工资
-                val totalWage = stats.wageTotal + stats.mealSubsidyTotal
-                
-                // 获取最近7天的漏记日期
-                val missedDays = findMissedDays(records, settings)
-                
-                _uiState.update {
-                    it.copy(
-                        totalHours = totalHours,
-                        totalWage = totalWage,
-                        progress = progress,
-                        recentRecords = records.take(10),
-                        missedDays = missedDays,
-                        isLoading = false
-                    )
-                }
-            }
+        val records = workRepository.getRecordsByDateRange(startDate, endDate)
+        val stats = StatsCalculator.calculateStats(
+            records,
+            settings.dailyWorkHours,
+            settings.overtimeRate,
+            settings.mealSubsidyStandard,
+            settings.dailyWage
+        )
+        
+        val progress = StatsCalculator.calculateProgress(
+            stats.totalStandard,
+            settings.monthTarget
+        )
+        
+        // 计算总工时（标准+加班）
+        val totalHours = records.sumOf { it.hours }
+        
+        // 计算总工资
+        val totalWage = stats.wageTotal + stats.mealSubsidyTotal
+        
+        // 获取最近7天的漏记日期
+        val missedDays = findMissedDays(records, settings)
+        
+        _uiState.update {
+            it.copy(
+                totalHours = totalHours,
+                totalWage = totalWage,
+                progress = progress,
+                recentRecords = records.take(10),
+                missedDays = missedDays,
+                isLoading = false
+            )
+        }
     }
     
     private fun findMissedDays(records: List<WorkRecord>, settings: UserSettings): List<String> {
@@ -147,7 +145,7 @@ class HomeViewModel(
             }
             
             // 检查重复
-            val existingRecords = workRepository.getRecordsByDateSync(date)
+            val existingRecords = workRepository.getRecordsByDate(date)
             if (existingRecords.isNotEmpty() && _uiState.value.editingRecord == null) {
                 _uiState.update { it.copy(showDuplicateWarning = true, duplicateDate = date) }
                 return@launch
@@ -217,7 +215,7 @@ class HomeViewModel(
                 isManual = isManual,
                 updatedAt = System.currentTimeMillis()
             )
-            workRepository.updateRecord(updated)
+            workRepository.update(updated)
         } else {
             val newRecord = WorkRecord(
                 date = date,
@@ -228,7 +226,7 @@ class HomeViewModel(
                 mealSubsidy = mealSubsidy,
                 isManual = isManual
             )
-            workRepository.insertRecord(newRecord)
+            workRepository.insert(newRecord)
         }
         
         _uiState.update { it.copy(showAddDialog = false, editingRecord = null) }
@@ -250,7 +248,7 @@ class HomeViewModel(
                 isManual = false
             )
             
-            workRepository.insertRecord(record)
+            workRepository.insert(record)
         }
     }
     
@@ -265,7 +263,7 @@ class HomeViewModel(
     fun confirmDelete() {
         viewModelScope.launch {
             _uiState.value.deleteRecordId?.let { id ->
-                workRepository.softDeleteRecord(id)
+                workRepository.softDeleteRecord(id.toLong())
             }
             _uiState.update { it.copy(showDeleteConfirm = false, deleteRecordId = null) }
         }

@@ -20,11 +20,11 @@ import com.worklogger.app.model.QuickPhrase
 fun QuickPhraseScreen(
     phrases: List<QuickPhrase>,
     onAddPhrase: (String) -> Unit,
-    onDeletePhrase: (Int) -> Unit,
+    onDeletePhrase: (QuickPhrase) -> Unit,
     onNavigateBack: () -> Unit
 ) {
     var newPhrase by remember { mutableStateOf("") }
-    var showDeleteConfirm by remember { mutableStateOf<Int?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf<QuickPhrase?>(null) }
     
     Scaffold(
         topBar = {
@@ -131,7 +131,7 @@ fun QuickPhraseScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                IconButton(onClick = { showDeleteConfirm = phrase.id }) {
+                                IconButton(onClick = { showDeleteConfirm = phrase }) {
                                     Icon(
                                         imageVector = Icons.Outlined.Delete,
                                         contentDescription = "删除",
@@ -146,7 +146,7 @@ fun QuickPhraseScreen(
         }
         
         // 删除确认
-        showDeleteConfirm?.let { id ->
+        showDeleteConfirm?.let { phrase ->
             AlertDialog(
                 onDismissRequest = { showDeleteConfirm = null },
                 title = { Text("确认删除") },
@@ -154,7 +154,7 @@ fun QuickPhraseScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            onDeletePhrase(id)
+                            onDeletePhrase(phrase)
                             showDeleteConfirm = null
                         }
                     ) {
