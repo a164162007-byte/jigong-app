@@ -70,7 +70,7 @@ class StatsViewModel(
             }
         }
         
-        workRepository.getRecordsByDateRange(startDate, endDate).collect { records ->
+        val records = workRepository.getRecordsByDateRange(startDate, endDate)
             val stats = StatsCalculator.calculateStats(
                 records,
                 settings.dailyWorkHours,
@@ -91,7 +91,7 @@ class StatsViewModel(
             val prevStartDate = DateUtils.getYearMonthFirstDay(prevYearMonth)
             val prevEndDate = DateUtils.getYearMonthLastDay(prevYearMonth)
             
-            val allRecords = workRepository.getAllRecordsSync()
+            val allRecords = workRepository.getAllRecordsOnce()
             val prevRecords = allRecords.filter { 
                 it.date >= prevStartDate && it.date <= prevEndDate 
             }
@@ -140,7 +140,7 @@ class StatsViewModel(
             val startDate = DateUtils.getYearMonthFirstDay(ym)
             val endDate = DateUtils.getYearMonthLastDay(ym)
             
-            val records = workRepository.getAllRecordsSync().filter {
+            val records = workRepository.getAllRecordsOnce().filter {
                 it.date >= startDate && it.date <= endDate
             }
             
