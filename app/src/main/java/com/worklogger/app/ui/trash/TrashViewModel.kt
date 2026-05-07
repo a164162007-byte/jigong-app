@@ -31,7 +31,7 @@ class TrashViewModel(
     
     private fun loadData() {
         viewModelScope.launch {
-            workRepository.deletedRecords.collect { records ->
+            workRepository.trashRecords.collect { records ->
                 _uiState.update {
                     it.copy(
                         deletedRecords = records,
@@ -46,13 +46,13 @@ class TrashViewModel(
         viewModelScope.launch {
             // 自动清理超过30天的已删除记录
             val thirtyDaysAgo = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30)
-            workRepository.cleanOldDeleted(thirtyDaysAgo)
+            workRepository.emptyTrash()
         }
     }
     
     fun restoreRecord(id: Int) {
         viewModelScope.launch {
-            workRepository.restoreRecord(id)
+            workRepository.restoreFromTrashById(id)
         }
     }
     
@@ -67,7 +67,7 @@ class TrashViewModel(
     fun confirmPermanentDelete() {
         viewModelScope.launch {
             _uiState.value.deleteRecordId?.let { id ->
-                workRepository.permanentDeleteRecord(id)
+                workRepository.permanentDeleteById(id)
             }
             _uiState.update { it.copy(showDeleteConfirm = false, deleteRecordId = null) }
         }
@@ -84,7 +84,7 @@ class TrashViewModel(
     fun permanentDeleteAll() {
         viewModelScope.launch {
             _uiState.value.deletedRecords.forEach { record ->
-                workRepository.permanentDeleteRecord(record.id)
+                workRepository.permanentDeleteById(record.id)
             }
             _uiState.update { it.copy(showPermanentDeleteConfirm = false) }
         }
