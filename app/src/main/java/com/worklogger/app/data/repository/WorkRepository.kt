@@ -166,6 +166,10 @@ class WorkRepository(
     suspend fun getAllRecordsOnce(): List<WorkRecord> {
         return workRecordDao.getAllRecordsOnce()
     }
+    
+    suspend fun permanentlyDeleteById(id: Int) {
+        workRecordDao.permanentlyDelete(id.toLong())
+    }
     suspend fun getAllLocationsOnce(): List<String> {
         return workRecordDao.getAllLocations()
     }
