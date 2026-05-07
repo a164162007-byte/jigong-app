@@ -167,7 +167,6 @@ class WorkRepository(
         return workRecordDao.getAllRecordsOnce()
     }
     
-    }
     suspend fun getAllLocationsOnce(): List<String> {
         return workRecordDao.getAllLocations()
     }
