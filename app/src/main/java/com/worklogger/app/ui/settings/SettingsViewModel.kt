@@ -70,7 +70,7 @@ class SettingsViewModel(
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
     
     // 云同步服务
-    private val cloudSyncService = CloudSyncService()
+    private val cloudSyncService = CloudSyncService
     
     // 数据导入导出工具
     private val dataExporter = DataExporter(context)
