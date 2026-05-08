@@ -107,7 +107,7 @@ object CloudSyncService {
                 
                 val body = response.body?.string() ?: ""
                 
-                if (response.isSuccessful || response.code == 200 || body.contains("success") || body.contains(""need_login")) {
+                if (response.isSuccessful || response.code == 200 || body.contains("success")) {
                     Result.success(true)
                 } else {
                     Result.failure(IOException("登录失败: HTTP ${response.code}"))
