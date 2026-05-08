@@ -269,4 +269,66 @@ object CloudSyncService {
             }
         }
     }
+
+    // 同步结果数据类
+    data class SyncResult(
+        val success: Boolean,
+        val uploadedCount: Int = 0,
+        val downloadedCount: Int = 0,
+        val message: String? = null
+    )
+
+    suspend fun testConnection(serverUrl: String): Result<Boolean> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val url = buildUrl(serverUrl, "api/records")
+                val request = Request.Builder().url(url).get().build()
+                val response = client.newCall(request).execute()
+                // 401可能是正常的（需要登录），只要不是网络错误就说明连接成功
+                if (response.isSuccessful || response.code == 401) {
+                    Result.success(true)
+                } else {
+                    Result.success(false)
+                }
+            } catch (e: Exception) {
+                Result.success(false)
+            }
+        }
+    }
+
+    suspend fun syncData(
+        serverUrl: String,
+        username: String,
+        password: String,
+        localRecords: List<WorkRecord>
+    ): SyncResult {
+        return withContext(Dispatchers.IO) {
+            try {
+                // 先上传
+                val uploadResult = uploadRecords(serverUrl, username, password, localRecords)
+                val uploadedCount = if (uploadResult.isSuccess) uploadResult.getOrNull()?.first ?: 0 else 0
+                
+                // 返回结果
+                SyncResult(
+                    success = true,
+                    uploadedCount = uploadedCount,
+                    message = "同步完成"
+                )
+            } catch (e: Exception) {
+                SyncResult(
+                    success = false,
+                    message = e.message ?: "同步失败"
+                )
+            }
+        }
+    }
+
+    suspend fun downloadData(
+        serverUrl: String,
+        username: String,
+        password: String,
+        localRecords: List<WorkRecord>
+    ): Result<List<CloudWorkRecord>> {
+        return fetchRecords(serverUrl, username, password)
+    }
 }
