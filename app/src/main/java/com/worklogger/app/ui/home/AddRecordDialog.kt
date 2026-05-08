@@ -34,7 +34,7 @@ fun AddRecordDialog(
     onDismiss: () -> Unit,
     onSave: (date: String, hours: Double, isOvertime: Boolean, location: String, remark: String, mealSubsidy: Boolean, isManual: Boolean) -> Unit
 ) {
-    // 工地名称可选
+    // 工地名称必填
     var locationError by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf(record?.date ?: DateUtils.today()) }
     var hours by remember { mutableStateOf(record?.hours?.toString() ?: "7") }
