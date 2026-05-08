@@ -15,8 +15,8 @@ data class CloudWorkRecord(
     val hours: Double,
     val isOvertime: Boolean = false,
     val location: String? = null,
-    val notes: String? = null,
-    val mealAllowance: Double? = null,
+    val remark: String? = null,
+    val mealSubsidy: Boolean? = null,
     val isDeleted: Boolean = false
 )
 
@@ -175,10 +175,10 @@ object CloudSyncService {
                         hours = record.hours,
                         isOvertime = record.isOvertime,
                         location = record.location,
-                        notes = record.notes,
+                        notes = record.remark,
                         wage = record.wage,
                         overtimeWage = record.overtimeWage,
-                        mealSubsidy = record.mealAllowance
+                        mealSubsidy = record.mealSubsidy
                     )
 
                     val body = RequestBody.create(mediaType, gson.toJson(cloudRecord))
