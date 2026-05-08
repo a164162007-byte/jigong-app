@@ -26,6 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.worklogger.app.data.repository.SettingsRepository
 import com.worklogger.app.data.repository.WorkRepository
+import com.worklogger.app.utils.DownloadState
+import com.worklogger.app.utils.ReleaseInfo
+import com.worklogger.app.utils.UpdateCheckResult
+
 import com.worklogger.app.model.QuickPhrase
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -218,6 +222,22 @@ fun SettingsScreen(
                 )
                 
                 // 清除数据
+                
+                // 检查更新
+                SettingsClickableItem(
+                    icon = Icons.Default.SystemUpdate,
+                    title = "检查更新",
+                    subtitle = if (uiState.isCheckingUpdate) "正在检查..." 
+                               else when (uiState.updateCheckResult) {
+                                   is UpdateCheckResult.UpdateAvailable -> "发现新版本 ${(uiState.updateCheckResult as UpdateCheckResult.UpdateAvailable).info.versionName}"
+                                   is UpdateCheckResult.NoUpdate -> "当前已是最新版本"
+                                   is UpdateCheckResult.Error -> "检查失败：${(uiState.updateCheckResult as UpdateCheckResult.Error).message}"
+                                   else -> "点击检查是否有新版本"
+                               },
+                    onClick = { viewModel.checkForUpdate() },
+                    enabled = !uiState.isCheckingUpdate
+                )
+                
                 SettingsClickableItem(
                     icon = Icons.Default.DeleteForever,
                     title = "清除所有数据",
@@ -249,6 +269,21 @@ fun SettingsScreen(
                     TextButton(onClick = { viewModel.hideClearConfirm() }) {
                         Text("取消")
                     }
+                }
+            )
+        }
+        
+        
+        // 更新对话框
+        if (uiState.updateCheckResult is UpdateCheckResult.UpdateAvailable) {
+            val activity = LocalContext.current as? Activity
+            UpdateDialog(
+                releaseInfo = (uiState.updateCheckResult as UpdateCheckResult.UpdateAvailable).info,
+                currentVersion = viewModel.getCurrentVersion().first,
+                downloadState = uiState.downloadState,
+                onDismiss = { /* 保持对话框显示，直到用户关闭 */ },
+                onDownload = { 
+                    activity?.let { viewModel.downloadAndInstallUpdate(it) }
                 }
             )
         }
@@ -557,6 +592,75 @@ fun CloudConfigDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 更新对话框
+ */
+@Composable
+fun UpdateDialog(
+    releaseInfo: ReleaseInfo,
+    currentVersion: String,
+    downloadState: DownloadState,
+    onDismiss: () -> Unit,
+    onDownload: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.SystemUpdate, contentDescription = null) },
+        title = { Text("发现新版本") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 版本信息对比
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("当前版本：v$currentVersion", style = MaterialTheme.typography.bodyMedium)
+                    Text("最新版本：v${releaseInfo.versionName}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                }
+                
+                HorizontalDivider()
+                
+                // 更新说明
+                Text("更新说明：", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = releaseInfo.releaseNotes,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .heightIn(max = 200.dp)
+                )
+                
+                // 下载进度
+                if (downloadState is DownloadState.Downloading) {
+                    HorizontalDivider()
+                    Text("下载进度：${downloadState.progress}%", style = MaterialTheme.typography.bodyMedium)
+                    LinearProgressIndicator(
+                        progress = { downloadState.progress / 100f },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDownload,
+                enabled = downloadState !is DownloadState.Downloading
+            ) {
+                Text(if (downloadState is DownloadState.Downloading) "下载中..." else "立即更新")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("稍后")
             }
         }
     )
