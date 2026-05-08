@@ -16,8 +16,6 @@ data class CloudWorkRecord(
     val isOvertime: Boolean = false,
     val location: String? = null,
     val notes: String? = null,
-    val wage: Double? = null,
-    val overtimeWage: Double? = null,
     val mealAllowance: Double? = null,
     val isDeleted: Boolean = false
 )
@@ -166,7 +164,7 @@ object CloudSyncService {
                 }
 
                 val url = buildUrl(serverUrl, "api/records")
-                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val mediaType = MediaType.parse("application/json; charset=utf-8")
 
                 var successCount = 0
                 var duplicateCount = 0
@@ -180,7 +178,7 @@ object CloudSyncService {
                         notes = record.notes,
                         wage = record.wage,
                         overtimeWage = record.overtimeWage,
-                        mealAllowance = record.mealAllowance
+                        mealSubsidy = record.mealAllowance
                     )
 
                     val body = RequestBody.create(mediaType, gson.toJson(cloudRecord))
@@ -255,7 +253,7 @@ object CloudSyncService {
                 }
 
                 val url = buildUrl(serverUrl, "api/settings")
-                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val mediaType = MediaType.parse("application/json; charset=utf-8")
                 val body = RequestBody.create(mediaType, gson.toJson(mapOf("settings" to settings)))
                 val request = Request.Builder().url(url).post(body).build()
                 val response = client.newCall(request).execute()
