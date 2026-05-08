@@ -28,7 +28,6 @@ import com.worklogger.app.data.repository.SettingsRepository
 import com.worklogger.app.data.repository.WorkRepository
 import com.worklogger.app.utils.DownloadState
 import com.worklogger.app.utils.ReleaseInfo
-import com.worklogger.app.utils.UpdateCheckResult
 
 import com.worklogger.app.model.QuickPhrase
 
@@ -626,7 +625,7 @@ fun UpdateDialog(
                     Text("最新版本：v${releaseInfo.versionName}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                 }
                 
-                HorizontalDivider()
+                Divider()
                 
                 // 更新说明
                 Text("更新说明：", style = MaterialTheme.typography.titleSmall)
@@ -641,7 +640,7 @@ fun UpdateDialog(
                 
                 // 下载进度
                 if (downloadState is DownloadState.Downloading) {
-                    HorizontalDivider()
+                    Divider()
                     Text("下载进度：${downloadState.progress}%", style = MaterialTheme.typography.bodyMedium)
                     LinearProgressIndicator(
                         progress = { downloadState.progress / 100f },
