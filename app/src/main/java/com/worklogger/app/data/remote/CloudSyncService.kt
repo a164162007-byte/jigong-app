@@ -6,6 +6,7 @@ import com.worklogger.app.model.WorkRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -164,7 +165,7 @@ object CloudSyncService {
                 }
 
                 val url = buildUrl(serverUrl, "api/records")
-                val mediaType = MediaType.parse("application/json; charset=utf-8")
+                val mediaType = "application/json; charset=utf-8".toMediaType()
 
                 var successCount = 0
                 var duplicateCount = 0
@@ -251,7 +252,7 @@ object CloudSyncService {
                 }
 
                 val url = buildUrl(serverUrl, "api/settings")
-                val mediaType = MediaType.parse("application/json; charset=utf-8")
+                val mediaType = "application/json; charset=utf-8".toMediaType()
                 val body = RequestBody.create(mediaType, gson.toJson(mapOf("settings" to settings)))
                 val request = Request.Builder().url(url).post(body).build()
                 val response = client.newCall(request).execute()
@@ -330,5 +331,45 @@ object CloudSyncService {
         localRecords: List<WorkRecord>
     ): Result<List<CloudWorkRecord>> {
         return fetchRecords(serverUrl, username, password)
+    }
+
+    /**
+     * CloudWorkRecord转换为WorkRecord
+     */
+    fun CloudWorkRecord.toWorkRecord(): WorkRecord {
+        return WorkRecord(
+            id = id ?: 0,
+            date = date,
+            hours = hours,
+            isOvertime = isOvertime,
+            location = location ?: "",
+            remark = remark ?: "",
+            mealSubsidy = mealSubsidy ?: false,
+            isManual = true,
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis(),
+            isDeleted = isDeleted,
+            deletedAt = if (isDeleted) System.currentTimeMillis() else null
+        )
+    }
+
+    /**
+     * WorkRecord转换为Map用于导出
+     */
+    fun workRecordToExportMap(record: WorkRecord): Map<String, Any?> {
+        return mapOf(
+            "id" to record.id,
+            "date" to record.date,
+            "hours" to record.hours,
+            "isOvertime" to record.isOvertime,
+            "location" to record.location,
+            "remark" to record.remark,
+            "mealSubsidy" to record.mealSubsidy,
+            "isManual" to record.isManual,
+            "createdAt" to record.createdAt,
+            "updatedAt" to record.updatedAt,
+            "isDeleted" to record.isDeleted,
+            "deletedAt" to record.deletedAt
+        )
     }
 }

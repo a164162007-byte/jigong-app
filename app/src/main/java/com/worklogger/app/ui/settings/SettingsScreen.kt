@@ -643,7 +643,7 @@ fun UpdateDialog(
                     Divider()
                     Text("下载进度：${downloadState.progress}%", style = MaterialTheme.typography.bodyMedium)
                     LinearProgressIndicator(
-                        progress = { downloadState.progress / 100f },
+                        progress = downloadState.progress / 100f,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }

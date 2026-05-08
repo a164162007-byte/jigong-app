@@ -310,11 +310,11 @@ class SettingsViewModel(
             
             _uiState.update { it.copy(syncResult = "正在测试连接...") }
             
-            val success = cloudSyncService.testConnection(serverUrl)
+            val result = cloudSyncService.testConnection(serverUrl)
             
             _uiState.update { 
                 it.copy(
-                    syncResult = if (success) "连接成功！" else "连接失败，请检查服务器地址"
+                    syncResult = if (result.getOrDefault(false)) "连接成功！" else "连接失败，请检查服务器地址"
                 ) 
             }
         }
@@ -354,7 +354,7 @@ class SettingsViewModel(
                     // 插入下载的记录
                     var downloadedCount = 0
                     for (record in cloudRecords) {
-                        workRepository.insertIfNotExists(record)
+                        workRepository.insertIfNotExists(cloudSyncService.run { record.toWorkRecord() })
                         downloadedCount++
                     }
                     
@@ -412,7 +412,7 @@ class SettingsViewModel(
                 // 插入下载的记录
                 var downloadedCount = 0
                 for (record in cloudRecords) {
-                    workRepository.insertIfNotExists(record)
+                    workRepository.insertIfNotExists(cloudSyncService.run { record.toWorkRecord() })
                     downloadedCount++
                 }
                 

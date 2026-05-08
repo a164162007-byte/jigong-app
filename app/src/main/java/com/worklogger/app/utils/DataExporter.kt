@@ -55,11 +55,9 @@ class DataExporter(private val context: Context) {
         settings: Map<String, Any>? = null,
         statistics: Map<String, Any>? = null
     ): String {
-        val cloudSyncService = CloudSyncService()
-        
         // 转换记录为导出格式
         val exportRecords = records.map { record ->
-            cloudSyncService.workRecordToExportMap(record)
+            CloudSyncService.workRecordToExportMap(record)
         }
         
         val exportData = ExportData(
