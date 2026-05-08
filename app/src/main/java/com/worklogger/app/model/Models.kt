@@ -47,7 +47,7 @@ data class UserSettings(
     val overtimeRate: Double = 1.0,         // 保留但不使用（向后兼容）
     val dailyWage: Double = 0.0,           // 日工资标准
     val monthTarget: Double = 22.0,         // 月工时目标（标准工天数）
-    val mealSubsidyStandard: Double = 30.0 // 饭补30元/天
+    val mealSubsidyStandard: Double = 30.0, // 饭补30元/天
     val offWorkTime: String = "18:00",     // 下班时间 HH:mm
     val offWorkReminder: Boolean = true,   // 下班提醒开关
     val missedDayReminder: Boolean = true, // 漏记提醒开关
