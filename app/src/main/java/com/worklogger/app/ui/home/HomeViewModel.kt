@@ -30,7 +30,8 @@ data class HomeUiState(
     val showHoursWarning: Boolean = false,
     val warningHours: Double = 0.0,
     val showDuplicateWarning: Boolean = false,
-    val duplicateDate: String = ""
+    val duplicateDate: String = "",
+    val showQuickCheckInDialog: Boolean = false  // 一键记工需要输入工地名称
 )
 
 class HomeViewModel(
@@ -40,6 +41,11 @@ class HomeViewModel(
     
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    
+    // 临时保存一键记工的工时数据
+    private var pendingQuickCheckInHours: Double = 0.0
+    private var pendingQuickCheckInOvertime: Boolean = false
+    private var pendingQuickCheckInMealSubsidy: Boolean = false
     
     init {
         loadData()
@@ -234,22 +240,40 @@ class HomeViewModel(
     
     fun quickCheckIn() {
         viewModelScope.launch {
-            val today = DateUtils.today()
             val settings = _uiState.value.settings
             
-            // 一键记工：标准工（标准工时），自动设置饭补，工地名称可选
+            // 保存一键记工的参数，显示对话框让用户输入工地名称
+            pendingQuickCheckInHours = settings.dailyWorkHours
+            pendingQuickCheckInOvertime = false
+            pendingQuickCheckInMealSubsidy = true
+            
+            // 显示一键记工对话框，让用户输入工地名称
+            _uiState.update { it.copy(showQuickCheckInDialog = true) }
+        }
+    }
+    
+    fun confirmQuickCheckIn(location: String) {
+        viewModelScope.launch {
+            val today = DateUtils.today()
+            
+            // 一键记工：标准工（标准工时），强制工地名称
             val record = WorkRecord(
                 date = today,
-                hours = settings.dailyWorkHours,
-                isOvertime = false,
-                location = "",
+                hours = pendingQuickCheckInHours,
+                isOvertime = pendingQuickCheckInOvertime,
+                location = location.trim(),
                 remark = "",
-                mealSubsidy = true,  // 标准工自动有饭补
+                mealSubsidy = pendingQuickCheckInMealSubsidy,
                 isManual = false
             )
             
             workRepository.insert(record)
+            _uiState.update { it.copy(showQuickCheckInDialog = false) }
         }
+    }
+    
+    fun cancelQuickCheckIn() {
+        _uiState.update { it.copy(showQuickCheckInDialog = false) }
     }
     
     fun showDeleteConfirm(recordId: Int) {
