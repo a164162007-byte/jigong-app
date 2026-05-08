@@ -363,6 +363,7 @@ fun QuickCheckInDialog(
     onConfirm: (String) -> Unit
 ) {
     var location by remember { mutableStateOf("") }
+    var locationError by remember { mutableStateOf(false) }
     var showLocationDropdown by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -433,7 +434,13 @@ fun QuickCheckInDialog(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
-                        onClick = { onConfirm(location.trim()) },
+                        onClick = {
+                if (location.trim().isBlank()) {
+                    locationError = true
+                    return@Button
+                }
+                onConfirm(location.trim())
+            },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary
                         )
