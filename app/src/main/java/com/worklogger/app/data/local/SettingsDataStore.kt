@@ -36,11 +36,11 @@ class SettingsDataStore(private val context: Context) {
     
     val settings: Flow<UserSettings> = context.dataStore.data.map { preferences ->
         UserSettings(
-            dailyWorkHours = preferences[DAILY_WORK_HOURS] ?: 8.0,
-            overtimeRate = preferences[OVERTIME_RATE] ?: 1.0,
-            dailyWage = preferences[DAILY_WAGE] ?: 0.0,
+            dailyWorkHours = preferences[DAILY_WORK_HOURS] ?: 7.0,
+            overtimeRate = preferences[OVERTIME_RATE] ?: 1.5,
+            dailyWage = preferences[DAILY_WAGE] ?: 350.0,
             monthTarget = preferences[MONTH_TARGET] ?: 22.0,
-            mealSubsidyStandard = preferences[MEAL_SUBSIDY_STANDARD] ?: 0.0,
+            mealSubsidyStandard = preferences[MEAL_SUBSIDY_STANDARD] ?: 15.0,
             offWorkTime = preferences[OFF_WORK_TIME] ?: "18:00",
             offWorkReminder = preferences[OFF_WORK_REMINDER] ?: true,
             missedDayReminder = preferences[MISSED_DAY_REMINDER] ?: true,
