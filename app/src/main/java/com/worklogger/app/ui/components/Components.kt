@@ -354,3 +354,94 @@ fun MissedDayChip(
     }
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun QuickCheckInDialog(
+    recentLocations: List<String> = emptyList(),
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var location by remember { mutableStateOf("") }
+    var showLocationDropdown by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+            ) {
+                Text(
+                    text = "一键记工",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // 地点输入 - 不强制，可以空
+                ExposedDropdownMenuBox(
+                    expanded = showLocationDropdown && recentLocations.isNotEmpty(),
+                    onExpandedChange = { showLocationDropdown = it }
+                ) {
+                    OutlinedTextField(
+                        value = location,
+                        onValueChange = { location = it },
+                        label = { Text("工地名称 (可选)") },
+                        trailingIcon = {
+                            if (recentLocations.isNotEmpty()) {
+                                Icon(Icons.Outlined.LocationOn, contentDescription = null)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+
+                    if (recentLocations.isNotEmpty()) {
+                        ExposedDropdownMenu(
+                            expanded = showLocationDropdown,
+                            onDismissRequest = { showLocationDropdown = false }
+                        ) {
+                            recentLocations.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option) },
+                                    onClick = {
+                                        location = option
+                                        showLocationDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("取消")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { onConfirm(location.trim()) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text("确认")
+                    }
+                }
+            }
+        }
+    }
+}
