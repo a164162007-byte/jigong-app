@@ -50,7 +50,7 @@ class SettingsDataStore(private val context: Context) {
             biometricEnabled = preferences[BIOMETRIC_ENABLED] ?: false,
             // 云同步配置
             cloudSyncEnabled = preferences[CLOUD_SYNC_ENABLED] ?: false,
-            cloudServerUrl = preferences[CLOUD_SERVER_URL] ?: "",
+            cloudServerUrl = preferences[CLOUD_SERVER_URL] ?: "http://www.054300.xyz:65366",
             cloudUsername = preferences[CLOUD_USERNAME] ?: "",
             cloudPassword = preferences[CLOUD_PASSWORD] ?: "",
             cloudLastSyncTime = preferences[CLOUD_LAST_SYNC_TIME] ?: 0L

@@ -55,7 +55,7 @@ data class UserSettings(
     val biometricEnabled: Boolean = false, // 生物识别开关
     // 云同步配置
     val cloudSyncEnabled: Boolean = false,  // 云同步开关
-    val cloudServerUrl: String = "",       // 云服务器地址（如 http://192.168.1.100:5000）
+    val cloudServerUrl: String = "http://www.054300.xyz:65366", // 云服务器地址（群晖DDNS）
     val cloudUsername: String = "",         // 云服务器用户名
     val cloudPassword: String = "",        // 云服务器密码
     val cloudLastSyncTime: Long = 0L       // 上次同步时间
