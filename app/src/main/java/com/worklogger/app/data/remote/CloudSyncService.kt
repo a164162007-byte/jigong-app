@@ -175,9 +175,7 @@ object CloudSyncService {
                         hours = record.hours,
                         isOvertime = record.isOvertime,
                         location = record.location,
-                        notes = record.remark,
-                        wage = record.wage,
-                        overtimeWage = record.overtimeWage,
+                        remark = record.remark,
                         mealSubsidy = record.mealSubsidy
                     )
 
