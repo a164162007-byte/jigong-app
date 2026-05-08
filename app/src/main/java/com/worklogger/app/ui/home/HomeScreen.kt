@@ -252,6 +252,17 @@ fun HomeScreen(
             )
         }
         
+        // 一键记工对话框
+        if (uiState.showQuickCheckInDialog) {
+            QuickCheckInDialog(
+                recentLocations = uiState.recentLocations,
+                onDismiss = { viewModel.cancelQuickCheckIn() },
+                onConfirm = { location ->
+                    viewModel.confirmQuickCheckIn(location)
+                }
+            )
+        }
+        
         // 删除确认对话框
         if (uiState.showDeleteConfirm) {
             ConfirmDialog(
