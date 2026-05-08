@@ -31,14 +31,13 @@ import java.util.*
 fun AddRecordDialog(
     record: WorkRecord? = null,
     recentLocations: List<String> = emptyList(),
-    requireLocation: Boolean = true,  // 一键记工不需要工地名称，手动记工需要
     onDismiss: () -> Unit,
     onSave: (date: String, hours: Double, isOvertime: Boolean, location: String, remark: String, mealSubsidy: Boolean, isManual: Boolean) -> Unit
 ) {
-    // 根据requireLocation初始化locationError
-    var locationError by remember { mutableStateOf(requireLocation) }
+    // 始终强制工地名称
+    var locationError by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf(record?.date ?: DateUtils.today()) }
-    var hours by remember { mutableStateOf(record?.hours?.toString() ?: "8") }
+    var hours by remember { mutableStateOf(record?.hours?.toString() ?: "7") }
     var location by remember { mutableStateOf(record?.location ?: "") }
     var remark by remember { mutableStateOf(record?.remark ?: "") }
     var mealSubsidy by remember { mutableStateOf(record?.mealSubsidy ?: false) }
@@ -168,7 +167,7 @@ fun AddRecordDialog(
                     val hourOptions = if (isOvertime) {
                         listOf(0.5, 1.0, 1.5, 2.0, 3.0, 4.0) // 加班快捷选项
                     } else {
-                        listOf(4.0, 6.0, 8.0, 10.0, 12.0) // 标准工快捷选项
+                        listOf(4.0, 6.0, 7.0, 8.0, 10.0, 12.0) // 标准工快捷选项（默认7小时）
                     }
                     items(hourOptions) { option ->
                         FilterChip(
@@ -193,7 +192,7 @@ fun AddRecordDialog(
                             locationError = false // 输入时清除错误
                             showLocationDropdown = true
                         },
-                        label = { Text(if (requireLocation) "工地名称 *" else "工地名称") }, // 必填标记
+                        label = { Text("工地名称 *") }, // 必填标记
                         isError = locationError, // 显示错误状态
                         supportingText = if (locationError) {
                             { Text("请输入工地名称", color = MaterialTheme.colorScheme.error) }
@@ -275,13 +274,13 @@ fun AddRecordDialog(
                     }
                     Button(
                         onClick = {
-                            // 验证地点是否为空（根据requireLocation决定是否必填）
-                            if (requireLocation && location.isBlank()) {
+                            // 验证地点是否为空（始终必填）
+                            if (location.isBlank()) {
                                 locationError = true
                                 return@Button
                             }
                             
-                            val hoursValue = hours.toDoubleOrNull() ?: 8.0
+                            val hoursValue = hours.toDoubleOrNull() ?: 7.0
                             onSave(
                                 selectedDate,
                                 hoursValue,
@@ -325,6 +324,126 @@ fun AddRecordDialog(
             }
         ) {
             DatePicker(state = datePickerState)
+        }
+    }
+}
+
+/**
+ * 一键记工对话框 - 仅用于快速记工时输入工地名称
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun QuickCheckInDialog(
+    recentLocations: List<String> = emptyList(),
+    onDismiss: () -> Unit,
+    onConfirm: (location: String) -> Unit
+) {
+    var location by remember { mutableStateOf("") }
+    var locationError by remember { mutableStateOf(false) }
+    var showLocationDropdown by remember { mutableStateOf(false) }
+    
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+            ) {
+                // 标题
+                Text(
+                    text = "一键记工",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(
+                    text = "请输入工地名称",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 工地名称输入
+                ExposedDropdownMenuBox(
+                    expanded = showLocationDropdown && recentLocations.isNotEmpty(),
+                    onExpandedChange = { showLocationDropdown = it }
+                ) {
+                    OutlinedTextField(
+                        value = location,
+                        onValueChange = {
+                            location = it
+                            locationError = false
+                            showLocationDropdown = true
+                        },
+                        label = { Text("工地名称 *") },
+                        isError = locationError,
+                        supportingText = if (locationError) {
+                            { Text("请输入工地名称", color = MaterialTheme.colorScheme.error) }
+                        } else null,
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = showLocationDropdown)
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.LocationOn, contentDescription = null)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+                    
+                    if (recentLocations.isNotEmpty()) {
+                        ExposedDropdownMenu(
+                            expanded = showLocationDropdown,
+                            onDismissRequest = { showLocationDropdown = false }
+                        ) {
+                            recentLocations.forEach { loc ->
+                                DropdownMenuItem(
+                                    text = { Text(loc) },
+                                    onClick = {
+                                        location = loc
+                                        locationError = false
+                                        showLocationDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // 按钮
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("取消")
+                    }
+                    Button(
+                        onClick = {
+                            if (location.isBlank()) {
+                                locationError = true
+                                return@Button
+                            }
+                            onConfirm(location.trim())
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("确认记工")
+                    }
+                }
+            }
         }
     }
 }
