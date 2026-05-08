@@ -74,14 +74,14 @@ class StatsViewModel(
         val stats = StatsCalculator.calculateStats(
             records,
             settings.dailyWorkHours,
-            settings.overtimeRate,
+            settings.overtimeWorkHours,
             settings.mealSubsidyStandard,
             settings.dailyWage
         )
         
         val overtimeDist = StatsCalculator.calculateOvertimeDistribution(
             records,
-            settings.dailyWorkHours
+            settings.overtimeWorkHours
         )
         
         val (totalDays, totalHours) = StatsCalculator.calculateTotalOvertime(records)
@@ -98,7 +98,7 @@ class StatsViewModel(
         val prevStats = StatsCalculator.calculateStats(
             prevRecords,
             settings.dailyWorkHours,
-            settings.overtimeRate,
+            settings.overtimeWorkHours,
             settings.mealSubsidyStandard,
             settings.dailyWage
         )
@@ -146,7 +146,7 @@ class StatsViewModel(
             val stats = StatsCalculator.calculateStats(
                 records,
                 settings.dailyWorkHours,
-                settings.overtimeRate,
+                settings.overtimeWorkHours,
                 settings.mealSubsidyStandard,
                 settings.dailyWage
             )

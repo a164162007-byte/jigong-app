@@ -87,16 +87,16 @@ fun SettingsScreen(
                 )
                 
                 NumberSettingItem(
-                    title = "加班折算率",
-                    subtitle = "加班小时 × 折算率 = 标准工时",
-                    value = uiState.settings.overtimeRate,
-                    onValueChange = { viewModel.updateOvertimeRate(it) },
-                    suffix = "倍"
+                    title = "加班工时标准",
+                    subtitle = "加班多少小时算1工",
+                    value = uiState.settings.overtimeWorkHours,
+                    onValueChange = { viewModel.updateOvertimeWorkHours(it) },
+                    suffix = "小时/工"
                 )
                 
                 NumberSettingItem(
                     title = "饭补金额",
-                    subtitle = "标准工天 × 饭补 = 饭补总额",
+                    subtitle = "标准工按工时比例计算",
                     value = uiState.settings.mealSubsidyStandard,
                     onValueChange = { viewModel.updateMealSubsidyStandard(it) },
                     prefix = "¥ ",

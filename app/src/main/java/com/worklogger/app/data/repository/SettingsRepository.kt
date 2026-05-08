@@ -17,6 +17,8 @@ class SettingsRepository(private val settingsDataStore: SettingsDataStore) {
     
     suspend fun updateOvertimeRate(rate: Double) = settingsDataStore.updateOvertimeRate(rate)
     
+    suspend fun updateOvertimeWorkHours(hours: Double) = settingsDataStore.updateOvertimeWorkHours(hours)
+    
     suspend fun updateDailyWage(wage: Double) = settingsDataStore.updateDailyWage(wage)
     
     suspend fun updateMonthTarget(target: Double) = settingsDataStore.updateMonthTarget(target)

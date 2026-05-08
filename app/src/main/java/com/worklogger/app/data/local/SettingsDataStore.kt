@@ -18,6 +18,7 @@ class SettingsDataStore(private val context: Context) {
     companion object {
         private val DAILY_WORK_HOURS = doublePreferencesKey("daily_work_hours")
         private val OVERTIME_RATE = doublePreferencesKey("overtime_rate")
+    private val OVERTIME_WORK_HOURS = doublePreferencesKey("overtime_work_hours")
         private val DAILY_WAGE = doublePreferencesKey("daily_wage")
         private val MONTH_TARGET = doublePreferencesKey("month_target")
         private val MEAL_SUBSIDY_STANDARD = doublePreferencesKey("meal_subsidy_standard")
@@ -36,11 +37,12 @@ class SettingsDataStore(private val context: Context) {
     
     val settings: Flow<UserSettings> = context.dataStore.data.map { preferences ->
         UserSettings(
-            dailyWorkHours = preferences[DAILY_WORK_HOURS] ?: 7.0,
+            dailyWorkHours = preferences[DAILY_WORK_HOURS] ?: 9.0,
+            overtimeWorkHours = preferences[OVERTIME_WORK_HOURS] ?: 8.0,
             overtimeRate = preferences[OVERTIME_RATE] ?: 1.5,
             dailyWage = preferences[DAILY_WAGE] ?: 350.0,
             monthTarget = preferences[MONTH_TARGET] ?: 22.0,
-            mealSubsidyStandard = preferences[MEAL_SUBSIDY_STANDARD] ?: 15.0,
+            mealSubsidyStandard = preferences[MEAL_SUBSIDY_STANDARD] ?: 30.0,
             offWorkTime = preferences[OFF_WORK_TIME] ?: "18:00",
             offWorkReminder = preferences[OFF_WORK_REMINDER] ?: true,
             missedDayReminder = preferences[MISSED_DAY_REMINDER] ?: true,
@@ -58,6 +60,7 @@ class SettingsDataStore(private val context: Context) {
     suspend fun updateSettings(settings: UserSettings) {
         context.dataStore.edit { preferences ->
             preferences[DAILY_WORK_HOURS] = settings.dailyWorkHours
+            preferences[OVERTIME_WORK_HOURS] = settings.overtimeWorkHours
             preferences[OVERTIME_RATE] = settings.overtimeRate
             preferences[DAILY_WAGE] = settings.dailyWage
             preferences[MONTH_TARGET] = settings.monthTarget
@@ -82,6 +85,10 @@ class SettingsDataStore(private val context: Context) {
     
     suspend fun updateOvertimeRate(rate: Double) {
         context.dataStore.edit { it[OVERTIME_RATE] = rate }
+    }
+    
+    suspend fun updateOvertimeWorkHours(hours: Double) {
+        context.dataStore.edit { it[OVERTIME_WORK_HOURS] = hours }
     }
     
     suspend fun updateDailyWage(wage: Double) {

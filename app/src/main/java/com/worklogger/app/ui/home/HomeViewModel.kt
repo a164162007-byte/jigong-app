@@ -77,7 +77,7 @@ class HomeViewModel(
         val stats = StatsCalculator.calculateStats(
             records,
             settings.dailyWorkHours,
-            settings.overtimeRate,
+            settings.overtimeWorkHours,
             settings.mealSubsidyStandard,
             settings.dailyWage
         )
@@ -210,6 +210,14 @@ class HomeViewModel(
     ) {
         val editingRecord = _uiState.value.editingRecord
         
+        // 业务规则：标准工(!isOvertime && !isManual)强制mealSubsidy=true，加班(isOvertime)强制mealSubsidy=false
+        // 手动折算的饭补可以自由选择
+        val finalMealSubsidy = when {
+            isOvertime -> false  // 加班没有饭补
+            !isOvertime && !isManual -> true  // 标准工必须有饭补
+            else -> mealSubsidy  // 手动折算可以自由选择
+        }
+        
         if (editingRecord != null) {
             val updated = editingRecord.copy(
                 date = date,
@@ -217,7 +225,7 @@ class HomeViewModel(
                 isOvertime = isOvertime,
                 location = location,
                 remark = remark,
-                mealSubsidy = mealSubsidy,
+                mealSubsidy = finalMealSubsidy,
                 isManual = isManual,
                 updatedAt = System.currentTimeMillis()
             )
@@ -229,7 +237,7 @@ class HomeViewModel(
                 isOvertime = isOvertime,
                 location = location,
                 remark = remark,
-                mealSubsidy = mealSubsidy,
+                mealSubsidy = finalMealSubsidy,
                 isManual = isManual
             )
             workRepository.insert(newRecord)
@@ -241,14 +249,30 @@ class HomeViewModel(
     fun quickCheckIn() {
         viewModelScope.launch {
             val settings = _uiState.value.settings
+            val recentLocations = _uiState.value.recentLocations
             
-            // 保存一键记工的参数，显示对话框让用户输入工地名称
-            pendingQuickCheckInHours = settings.dailyWorkHours
+            // 保存一键记工的参数
+            pendingQuickCheckInHours = settings.dailyWorkHours  // 标准工时 = 9.0
             pendingQuickCheckInOvertime = false
-            pendingQuickCheckInMealSubsidy = true
+            pendingQuickCheckInMealSubsidy = true  // 标准工必须有饭补
             
-            // 显示一键记工对话框，让用户输入工地名称
-            _uiState.update { it.copy(showQuickCheckInDialog = true) }
+            // 如果有最近工地，显示选择对话框；否则直接记录（location=""）
+            if (recentLocations.isNotEmpty()) {
+                _uiState.update { it.copy(showQuickCheckInDialog = true) }
+            } else {
+                // 没有最近工地，直接记录（location为空）
+                val today = DateUtils.today()
+                val record = WorkRecord(
+                    date = today,
+                    hours = pendingQuickCheckInHours,
+                    isOvertime = false,
+                    location = "",
+                    remark = "",
+                    mealSubsidy = true,  // 标准工必须有饭补
+                    isManual = false
+                )
+                workRepository.insert(record)
+            }
         }
     }
     
@@ -256,14 +280,14 @@ class HomeViewModel(
         viewModelScope.launch {
             val today = DateUtils.today()
             
-            // 一键记工：标准工（标准工时），强制工地名称
+            // 一键记工：标准工（标准工时），强制饭补=true
             val record = WorkRecord(
                 date = today,
                 hours = pendingQuickCheckInHours,
-                isOvertime = pendingQuickCheckInOvertime,
-                location = location.trim(),
+                isOvertime = false,  // 标准工
+                location = location.trim(),  // 可以为空
                 remark = "",
-                mealSubsidy = pendingQuickCheckInMealSubsidy,
+                mealSubsidy = true,  // 标准工必须有饭补
                 isManual = false
             )
             

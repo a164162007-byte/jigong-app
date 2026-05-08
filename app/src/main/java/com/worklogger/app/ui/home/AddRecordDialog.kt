@@ -37,7 +37,7 @@ fun AddRecordDialog(
     // 工地名称必填
     var locationError by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf(record?.date ?: DateUtils.today()) }
-    var hours by remember { mutableStateOf(record?.hours?.toString() ?: "7") }
+    var hours by remember { mutableStateOf(record?.hours?.toString() ?: "9") }
     var location by remember { mutableStateOf(record?.location ?: "") }
     var remark by remember { mutableStateOf(record?.remark ?: "") }
     var mealSubsidy by remember { mutableStateOf(record?.mealSubsidy ?: false) }
@@ -115,6 +115,7 @@ fun AddRecordDialog(
                         onClick = {
                             isOvertime = false
                             isManual = false
+                            mealSubsidy = true  // 标准工必须有饭补
                         },
                         label = { Text("标准工") },
                         colors = FilterChipDefaults.filterChipColors(
@@ -126,7 +127,10 @@ fun AddRecordDialog(
                         selected = isOvertime,
                         onClick = {
                             isOvertime = !isOvertime
-                            if (isOvertime) isManual = false
+                            if (isOvertime) {
+                                isManual = false
+                                mealSubsidy = false  // 加班没有饭补
+                            }
                         },
                         label = { Text("加班 ⏰") }, // 增强加班标记：添加时钟emoji
                         colors = FilterChipDefaults.filterChipColors(
@@ -142,6 +146,7 @@ fun AddRecordDialog(
                         onClick = {
                             isManual = !isManual
                             if (isManual) isOvertime = false
+                            // 手动折算可以自由选择饭补
                         },
                         label = { Text("手动折算") },
                         colors = FilterChipDefaults.filterChipColors(
@@ -167,7 +172,7 @@ fun AddRecordDialog(
                     val hourOptions = if (isOvertime) {
                         listOf(0.5, 1.0, 1.5, 2.0, 3.0, 4.0) // 加班快捷选项
                     } else {
-                        listOf(4.0, 6.0, 7.0, 8.0, 10.0, 12.0) // 标准工快捷选项（默认7小时）
+                        listOf(4.5, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0) // 标准工快捷选项（默认9小时）
                     }
                     items(hourOptions) { option ->
                         FilterChip(
@@ -244,18 +249,28 @@ fun AddRecordDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 // 饭补开关
+                // 规则：标准工必须饭补，加班没有饭补，手动折算可以自由选择
+                val mealSubsidyEnabled = !isOvertime && !(!isOvertime && !isManual)  // 只有手动折算时可用
+                val mealSubsidyText = when {
+                    !isOvertime && !isManual -> "饭补（标准工必含）"
+                    isOvertime -> "饭补（加班无饭补）"
+                    else -> "饭补"
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "饭补",
-                        style = MaterialTheme.typography.bodyLarge
+                        text = mealSubsidyText,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (!mealSubsidyEnabled) MaterialTheme.colorScheme.onSurfaceVariant 
+                                else MaterialTheme.colorScheme.onSurface
                     )
                     Switch(
                         checked = mealSubsidy,
-                        onCheckedChange = { mealSubsidy = it }
+                        onCheckedChange = { if (mealSubsidyEnabled) mealSubsidy = it },
+                        enabled = mealSubsidyEnabled
                     )
                 }
                 
@@ -329,7 +344,7 @@ fun AddRecordDialog(
 }
 
 /**
- * 一键记工对话框 - 仅用于快速记工时输入工地名称
+ * 一键记工对话框 - 仅用于快速记工时选择工地（可选）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -339,7 +354,6 @@ fun QuickCheckInDialog(
     onConfirm: (location: String) -> Unit
 ) {
     var location by remember { mutableStateOf("") }
-    var locationError by remember { mutableStateOf(false) }
     var showLocationDropdown by remember { mutableStateOf(false) }
     
     Dialog(onDismissRequest = onDismiss) {
@@ -364,13 +378,13 @@ fun QuickCheckInDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    text = "请输入工地名称",
+                    text = "请输入工地名称（可选）",
                     style = MaterialTheme.typography.bodyLarge
                 )
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // 工地名称输入
+                // 工地名称输入 - 不再必填
                 ExposedDropdownMenuBox(
                     expanded = showLocationDropdown && recentLocations.isNotEmpty(),
                     onExpandedChange = { showLocationDropdown = it }
@@ -379,14 +393,9 @@ fun QuickCheckInDialog(
                         value = location,
                         onValueChange = {
                             location = it
-                            locationError = false
                             showLocationDropdown = true
                         },
-                        label = { Text("工地名称 *") },
-                        isError = locationError,
-                        supportingText = if (locationError) {
-                            { Text("请输入工地名称", color = MaterialTheme.colorScheme.error) }
-                        } else null,
+                        label = { Text("工地名称") },  // 去掉 * 标记
                         trailingIcon = {
                             ExposedDropdownMenuDefaults.TrailingIcon(expanded = showLocationDropdown)
                         },
@@ -408,7 +417,6 @@ fun QuickCheckInDialog(
                                     text = { Text(loc) },
                                     onClick = {
                                         location = loc
-                                        locationError = false
                                         showLocationDropdown = false
                                     }
                                 )
@@ -419,7 +427,7 @@ fun QuickCheckInDialog(
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                // 按钮
+                // 按钮 - location为空也允许
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -432,10 +440,7 @@ fun QuickCheckInDialog(
                     }
                     Button(
                         onClick = {
-                            if (location.isBlank()) {
-                                locationError = true
-                                return@Button
-                            }
+                            // location可以为空
                             onConfirm(location.trim())
                         },
                         modifier = Modifier.weight(1f)

@@ -5,16 +5,29 @@ import com.worklogger.app.model.WorkRecord
 
 /**
  * 统计计算工具类
+ * 
+ * 核心规则：
+ * - 标准工：hours / dailyWorkHours = 工数（9小时=1工，4.5小时=0.5工）
+ * - 加班工：hours / overtimeWorkHours = 工数（8小时=1工，4小时=0.5工）
+ * - 手动折算：hours / dailyWorkHours = 工数
+ * - 饭补：只有标准工和手动折算有饭补，加班没有饭补
  */
 object StatsCalculator {
     
     /**
      * 计算统计数据
+     * 
+     * @param records 记工记录列表
+     * @param dailyWorkHours 标准工时（默认9小时=1工）
+     * @param overtimeWorkHours 加班工时（默认8小时=1工）
+     * @param mealSubsidyStandard 饭补标准（元/天）
+     * @param dailyWage 日工资标准
+     * @return 统计数据
      */
     fun calculateStats(
         records: List<WorkRecord>,
         dailyWorkHours: Double,
-        overtimeRate: Double,
+        overtimeWorkHours: Double,
         mealSubsidyStandard: Double,
         dailyWage: Double
     ): StatsData {
@@ -22,45 +35,51 @@ object StatsCalculator {
             return StatsData()
         }
         
-        // 标准工记录：不是加班且不是手动的记录
+        // 过滤记录类型
         val standardRecords = records.filter { !it.isOvertime && !it.isManual }
+        val manualRecords = records.filter { it.isManual && !it.isOvertime }
+        val overtimeRecords = records.filter { it.isOvertime }
         
-        // 标准工天数：按实际工时换算（而非记录数量）
-        // 例如：8小时 = 1天，4小时 = 0.5天
+        // 标准工天数：按实际工时换算（hours / dailyWorkHours）
         val standardDays = if (dailyWorkHours > 0) {
             standardRecords.sumOf { it.hours } / dailyWorkHours
-        } else {
-            0.0
-        }
+        } else 0.0
         
-        // 手动折算天数：按实际工时换算
-        val manualRecords = records.filter { it.isManual && !it.isOvertime }
+        // 手动折算天数：按实际工时换算（hours / dailyWorkHours）
         val manualDays = if (dailyWorkHours > 0) {
             manualRecords.sumOf { it.hours } / dailyWorkHours
-        } else {
-            0.0
-        }
+        } else 0.0
         
         // 加班总小时
-        val overtimeRecords = records.filter { it.isOvertime }
         val overtimeHours = overtimeRecords.sumOf { it.hours }
         
-        // 加班折算天数 = 加班小时 × 加班折算比例 ÷ 每日标准工时
-        val overtimeDays = overtimeHours * overtimeRate / dailyWorkHours
+        // 加班天数：按加班工时标准换算（hours / overtimeWorkHours）
+        val overtimeDays = if (overtimeWorkHours > 0) {
+            overtimeRecords.sumOf { it.hours } / overtimeWorkHours
+        } else 0.0
         
-        // 总标准工
+        // 总标准工（标准工天数 + 手动折算天数 + 加班天数）
         val totalStandard = standardDays + manualDays + overtimeDays
         
-        // 饭补计算：标准工按实际工时比例计算
-        // 例如：8小时全额饭补，4小时半额饭补
-        val mealSubsidyDays = if (dailyWorkHours > 0) {
-            standardRecords.sumOf { 
-                if (it.mealSubsidy) it.hours / dailyWorkHours else 0.0 
-            }
-        } else {
-            0.0
-        }
-        val mealSubsidyTotal = mealSubsidyDays * mealSubsidyStandard
+        // 饭补计算：只有标准工和手动折算有饭补，加班没有饭补！
+        // 饭补按工时比例换算：(hours / dailyWorkHours) × mealSubsidyStandard
+        
+        // 标准工饭补
+        val standardMealSubsidy = if (dailyWorkHours > 0) {
+            standardRecords.sumOf { record ->
+                if (record.mealSubsidy) record.hours / dailyWorkHours else 0.0
+            } * mealSubsidyStandard
+        } else 0.0
+        
+        // 手动折算饭补
+        val manualMealSubsidy = if (dailyWorkHours > 0) {
+            manualRecords.sumOf { record ->
+                if (record.mealSubsidy) record.hours / dailyWorkHours else 0.0
+            } * mealSubsidyStandard
+        } else 0.0
+        
+        // 加班没有饭补！
+        val mealSubsidyTotal = standardMealSubsidy + manualMealSubsidy
         
         // 应发工资
         val wageTotal = totalStandard * dailyWage
@@ -79,11 +98,14 @@ object StatsCalculator {
     
     /**
      * 计算加班分布
-     * 按每4小时为0.5天粒度统计
+     * 按加班工时标准换算天数
+     * 
+     * @param records 记工记录列表
+     * @param overtimeWorkHours 加班工时标准（8小时=1工）
      */
     fun calculateOvertimeDistribution(
         records: List<WorkRecord>,
-        dailyWorkHours: Double
+        overtimeWorkHours: Double
     ): Map<Double, Int> {
         // 按日期分组计算每天的加班天数
         val overtimeByDate = records
@@ -91,11 +113,13 @@ object StatsCalculator {
             .groupBy { it.date }
             .mapValues { (_, dayRecords) ->
                 val totalHours = dayRecords.sumOf { it.hours }
-                // 每4小时 = 0.5天
-                (totalHours / 4.0 * 0.5).let { days ->
-                    // 四舍五入到0.5的倍数
-                    Math.round(days * 2).toDouble() / 2
-                }
+                // 按加班工时标准换算天数
+                if (overtimeWorkHours > 0) {
+                    (totalHours / overtimeWorkHours).let { days ->
+                        // 四舍五入到0.5的倍数
+                        Math.round(days * 2).toDouble() / 2
+                    }
+                } else 0.0
             }
         
         // 统计分布
@@ -171,16 +195,22 @@ object StatsCalculator {
     
     /**
      * 计算月总工资
+     * 
+     * @param records 记工记录列表
+     * @param dailyWorkHours 标准工时
+     * @param overtimeWorkHours 加班工时标准
+     * @param dailyWage 日工资标准
+     * @param mealSubsidyStandard 饭补标准
      */
     fun calculateMonthlyWage(
         records: List<WorkRecord>,
         dailyWorkHours: Double,
-        overtimeRate: Double,
+        overtimeWorkHours: Double,
         dailyWage: Double,
         mealSubsidyStandard: Double
     ): Double {
         val stats = calculateStats(
-            records, dailyWorkHours, overtimeRate, mealSubsidyStandard, dailyWage
+            records, dailyWorkHours, overtimeWorkHours, mealSubsidyStandard, dailyWage
         )
         return stats.wageTotal + stats.mealSubsidyTotal
     }

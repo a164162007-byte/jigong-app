@@ -212,6 +212,12 @@ class SettingsViewModel(
         }
     }
     
+    fun updateOvertimeWorkHours(hours: Double) {
+        viewModelScope.launch {
+            settingsRepository.updateOvertimeWorkHours(hours)
+        }
+    }
+    
     fun updateMealSubsidyStandard(subsidy: Double) {
         viewModelScope.launch {
             settingsRepository.updateMealSubsidyStandard(subsidy)

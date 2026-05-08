@@ -42,11 +42,12 @@ data class QuickPhrase(
  * 用户设置数据类
  */
 data class UserSettings(
-    val dailyWorkHours: Double = 8.0,      // 每日标准工时
-    val overtimeRate: Double = 1.0,        // 加班折算比例
+    val dailyWorkHours: Double = 9.0,       // 标准工9小时=1工
+    val overtimeWorkHours: Double = 8.0,   // 加班8小时=1工
+    val overtimeRate: Double = 1.0,         // 保留但不使用（向后兼容）
     val dailyWage: Double = 0.0,           // 日工资标准
-    val monthTarget: Double = 22.0,        // 月工时目标（标准工天数）
-    val mealSubsidyStandard: Double = 0.0, // 饭补标准（元/天）
+    val monthTarget: Double = 22.0,         // 月工时目标（标准工天数）
+    val mealSubsidyStandard: Double = 30.0 // 饭补30元/天
     val offWorkTime: String = "18:00",     // 下班时间 HH:mm
     val offWorkReminder: Boolean = true,   // 下班提醒开关
     val missedDayReminder: Boolean = true, // 漏记提醒开关
