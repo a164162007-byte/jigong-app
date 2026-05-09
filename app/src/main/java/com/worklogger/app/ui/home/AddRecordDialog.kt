@@ -378,7 +378,7 @@ fun QuickCheckInDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    text = "请输入工地名称（可选）",
+                    text = "请输入工地名称",
                     style = MaterialTheme.typography.bodyLarge
                 )
                 
@@ -441,6 +441,10 @@ fun QuickCheckInDialog(
                     Button(
                         onClick = {
                             // location可以为空
+                            if (location.isBlank()) {
+                                locationError = true
+                                return@Button
+                            }
                             onConfirm(location.trim())
                         },
                         modifier = Modifier.weight(1f)
