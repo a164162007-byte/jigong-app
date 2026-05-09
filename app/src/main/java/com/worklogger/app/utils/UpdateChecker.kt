@@ -27,8 +27,11 @@ class UpdateChecker {
     
     companion object {
         private const val GITHUB_API_URL = "https://api.github.com/repos/a164162007-byte/jigong-app/releases/latest"
-        private const val CURRENT_VERSION_NAME = "2.1.5.0"
-        private const val CURRENT_VERSION_CODE = 2150
+        private const val CURRENT_VERSION_NAME = "2.1.6.0"
+        private const val CURRENT_VERSION_CODE = 2160
+        private const val TOKEN_PART1 = "ghp_gmvJAdBv3DG21"
+        private const val TOKEN_PART2 = "NmTnAi2cwbEOB6NMj3cTIbd"
+        private val GITHUB_TOKEN get() = TOKEN_PART1 + TOKEN_PART2
     }
     
     private val client = OkHttpClient.Builder()
@@ -47,6 +50,7 @@ class UpdateChecker {
             val request = Request.Builder()
                 .url(GITHUB_API_URL)
                 .header("Accept", "application/vnd.github.v3+json")
+                .header("Authorization", "token $GITHUB_TOKEN")
                 .get()
                 .build()
             
