@@ -39,8 +39,8 @@ class SettingsDataStore(private val context: Context) {
         UserSettings(
             dailyWorkHours = preferences[DAILY_WORK_HOURS] ?: 9.0,
             overtimeWorkHours = preferences[OVERTIME_WORK_HOURS] ?: 8.0,
-            overtimeRate = preferences[OVERTIME_RATE] ?: 1.5,
-            dailyWage = preferences[DAILY_WAGE] ?: 350.0,
+            overtimeRate = preferences[OVERTIME_RATE] ?: 1.0,
+            dailyWage = preferences[DAILY_WAGE] ?: 260.0,
             monthTarget = preferences[MONTH_TARGET] ?: 22.0,
             mealSubsidyStandard = preferences[MEAL_SUBSIDY_STANDARD] ?: 30.0,
             offWorkTime = preferences[OFF_WORK_TIME] ?: "18:00",
@@ -50,7 +50,7 @@ class SettingsDataStore(private val context: Context) {
             biometricEnabled = preferences[BIOMETRIC_ENABLED] ?: false,
             // 云同步配置
             cloudSyncEnabled = preferences[CLOUD_SYNC_ENABLED] ?: false,
-            cloudServerUrl = preferences[CLOUD_SERVER_URL] ?: "http://www.054300.xyz:65366",
+            cloudServerUrl = preferences[CLOUD_SERVER_URL] ?: "",
             cloudUsername = preferences[CLOUD_USERNAME] ?: "",
             cloudPassword = preferences[CLOUD_PASSWORD] ?: "",
             cloudLastSyncTime = preferences[CLOUD_LAST_SYNC_TIME] ?: 0L

@@ -549,10 +549,10 @@ fun CloudConfigDialog(
                     value = serverUrl,
                     onValueChange = onServerUrlChange,
                     label = { Text("服务器地址") },
-                    placeholder = { Text("http://www.054300.xyz:65366") },
+                    placeholder = { Text("http://服务器地址:端口") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    supportingText = { Text("群晖DDNS地址，带端口号") }
+                    supportingText = { Text("Web端Docker服务地址") }
                 )
                 
                 OutlinedTextField(

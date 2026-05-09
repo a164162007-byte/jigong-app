@@ -45,7 +45,7 @@ data class UserSettings(
     val dailyWorkHours: Double = 9.0,       // 标准工9小时=1工
     val overtimeWorkHours: Double = 8.0,   // 加班8小时=1工
     val overtimeRate: Double = 1.0,         // 保留但不使用（向后兼容）
-    val dailyWage: Double = 0.0,           // 日工资标准
+    val dailyWage: Double = 260.0,          // 日工资标准260元/天
     val monthTarget: Double = 22.0,         // 月工时目标（标准工天数）
     val mealSubsidyStandard: Double = 30.0, // 饭补30元/天
     val offWorkTime: String = "18:00",     // 下班时间 HH:mm
@@ -55,9 +55,9 @@ data class UserSettings(
     val biometricEnabled: Boolean = false, // 生物识别开关
     // 云同步配置
     val cloudSyncEnabled: Boolean = false,  // 云同步开关
-    val cloudServerUrl: String = "http://www.054300.xyz:65366", // 云服务器地址（群晖DDNS）
+    val cloudServerUrl: String = "",        // 云服务器地址（用户自行配置）
     val cloudUsername: String = "",         // 云服务器用户名
-    val cloudPassword: String = "",        // 云服务器密码
+    val cloudPassword: String = "",         // 云服务器密码
     val cloudLastSyncTime: Long = 0L       // 上次同步时间
 )
 
