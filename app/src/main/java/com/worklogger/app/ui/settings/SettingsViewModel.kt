@@ -463,11 +463,11 @@ class SettingsViewModel(
             val result = cloudSyncService.uploadRecords(serverUrl, username, password, localRecords)
             
             if (result.isSuccess) {
-                val (successCount, duplicateCount) = result.getOrNull() ?: Pair(0, 0)
+                val uploadResult = result.getOrNull() ?: Pair(0, 0)
                 _uiState.update { 
                     it.copy(
                         isSyncing = false,
-                        syncResult = "上传完成：成功$successCount条，重复$duplicateCount条"
+                        syncResult = "上传完成：成功${uploadResult.first}条，失败${uploadResult.second}条"
                     ) 
                 }
             } else {
