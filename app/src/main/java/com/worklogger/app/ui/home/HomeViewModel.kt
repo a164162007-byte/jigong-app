@@ -249,30 +249,14 @@ class HomeViewModel(
     fun quickCheckIn() {
         viewModelScope.launch {
             val settings = _uiState.value.settings
-            val recentLocations = _uiState.value.recentLocations
             
             // 保存一键记工的参数
             pendingQuickCheckInHours = settings.dailyWorkHours  // 标准工时 = 9.0
             pendingQuickCheckInOvertime = false
             pendingQuickCheckInMealSubsidy = true  // 标准工必须有饭补
             
-            // 如果有最近工地，显示选择对话框；否则直接记录（location=""）
-            if (recentLocations.isNotEmpty()) {
-                _uiState.update { it.copy(showQuickCheckInDialog = true) }
-            } else {
-                // 没有最近工地，直接记录（location为空）
-                val today = DateUtils.today()
-                val record = WorkRecord(
-                    date = today,
-                    hours = pendingQuickCheckInHours,
-                    isOvertime = false,
-                    location = "",
-                    remark = "",
-                    mealSubsidy = true,  // 标准工必须有饭补
-                    isManual = false
-                )
-                workRepository.insert(record)
-            }
+            // 始终弹出对话框，强制输入工地名称
+            _uiState.update { it.copy(showQuickCheckInDialog = true) }
         }
     }
     
