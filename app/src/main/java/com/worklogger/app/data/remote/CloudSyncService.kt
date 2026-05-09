@@ -245,8 +245,8 @@ object CloudSyncService {
     }
 
     /**
-     * 上传记录到云端
-     * 转换为 Web 端格式
+     * 上传记录到云端（批量导入）
+     * 使用 /api/import JSON接口，一次性提交所有记录
      */
     suspend fun uploadRecords(
         serverUrl: String,
@@ -256,15 +256,12 @@ object CloudSyncService {
     ): Result<Pair<Int, Int>> {
         return withContext(Dispatchers.IO) {
             try {
-                val url = buildUrl(serverUrl, "api/records")
+                val url = buildUrl(serverUrl, "api/import")
                 val mediaType = "application/json; charset=utf-8".toMediaType()
 
-                var successCount = 0
-                var duplicateCount = 0
-
-                for (record in records) {
-                    // 转换为 Web 端格式
-                    val cloudRecord = mapOf(
+                // 转换为 Web 端格式
+                val cloudRecords = records.map { record ->
+                    mapOf(
                         "work_date" to record.date,
                         "hours" to record.hours,
                         "record_type" to when {
@@ -272,29 +269,34 @@ object CloudSyncService {
                             record.isManual -> "manual"
                             else -> "standard"
                         },
-                        "location" to record.location,
+                        "location" to (record.location.ifEmpty { "未填写" }),
                         "remark" to record.remark,
                         "meal_subsidy" to record.mealSubsidy
                     )
-                    
-                    val body = RequestBody.create(mediaType, gson.toJson(cloudRecord))
-                    val request = buildAuthenticatedRequest(url, username, password, "POST", body)
-                    val response = client.newCall(request).execute()
-
-                    if (response.isSuccessful) {
-                        val responseBody = response.body?.string() ?: ""
-                        val responseData = gson.fromJson(responseBody, RecordsResponse::class.java)
-
-                        if (responseData.success) {
-                            successCount++
-                        } else if (responseData.message?.contains("duplicate") == true ||
-                            responseData.message?.contains("重复") == true) {
-                            duplicateCount++
-                        }
-                    }
                 }
 
-                Result.success(Pair(successCount, duplicateCount))
+                val importData = mapOf("records" to cloudRecords)
+                val body = RequestBody.create(mediaType, gson.toJson(importData))
+                val request = buildAuthenticatedRequest(url, username, password, "POST", body)
+                val response = client.newCall(request).execute()
+
+                if (response.isSuccessful) {
+                    val responseBody = response.body?.string() ?: ""
+                    val rootType = object : TypeToken<Map<String, Any>>() {}.type
+                    val root = gson.fromJson<Map<String, Any>>(responseBody, rootType)
+                    
+                    val success = root["success"] as? Boolean ?: false
+                    if (success) {
+                        val data = root["data"] as? Map<String, Any>
+                        val successCount = (data?.get("success_count") as? Number)?.toInt() ?: records.size
+                        val errorCount = (data?.get("error_count") as? Number)?.toInt() ?: 0
+                        Result.success(Pair(successCount, errorCount))
+                    } else {
+                        Result.failure(IOException(root["message"]?.toString() ?: "上传失败"))
+                    }
+                } else {
+                    Result.failure(IOException("HTTP ${response.code}"))
+                }
             } catch (e: Exception) {
                 Result.failure(e)
             }
