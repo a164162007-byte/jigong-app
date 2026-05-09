@@ -354,6 +354,7 @@ fun QuickCheckInDialog(
     onConfirm: (location: String) -> Unit
 ) {
     var location by remember { mutableStateOf("") }
+    var locationError by remember { mutableStateOf(false) }
     var showLocationDropdown by remember { mutableStateOf(false) }
     
     Dialog(onDismissRequest = onDismiss) {
@@ -393,6 +394,7 @@ fun QuickCheckInDialog(
                         value = location,
                         onValueChange = {
                             location = it
+                            locationError = false
                             showLocationDropdown = true
                         },
                         label = { Text("工地名称") },  // 去掉 * 标记
