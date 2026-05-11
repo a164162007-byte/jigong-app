@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -485,7 +486,7 @@ fun NumberSettingItem(
 ) {
     var textValue by remember(value) { mutableStateOf(if (value == value.toLong().toDouble()) 
         value.toLong().toString() else value.toString()) }
-    var isEditing by remember { mutableStateOf(false) }
+    var isFocused by remember { mutableStateOf(false) }
     
     Row(
         modifier = Modifier
@@ -506,15 +507,29 @@ fun NumberSettingItem(
         }
         
         OutlinedTextField(
-            value = if (isEditing) textValue else "$prefix$value$suffix",
+            value = textValue,
             onValueChange = { 
-                textValue = it.filter { c -> c.isDigit() || c == '.' }
-                it.toDoubleOrNull()?.let { v -> onValueChange(v) }
+                val filtered = it.filter { c -> c.isDigit() || c == '.' }
+                textValue = filtered
+                filtered.toDoubleOrNull()?.let { v -> onValueChange(v) }
             },
-            modifier = Modifier.width(120.dp),
+            modifier = Modifier
+                .width(120.dp)
+                .onFocusEvent { focusState ->
+                    isFocused = focusState.isFocused
+                    if (focusState.isFocused) {
+                        textValue = if (value == value.toLong().toDouble()) 
+                            value.toLong().toString() else value.toString()
+                    }
+                },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            trailingIcon = { Text(suffix, style = MaterialTheme.typography.bodySmall) },
+            prefix = if (prefix.isNotEmpty()) {
+                { Text(prefix, style = MaterialTheme.typography.bodySmall) }
+            } else null,
+            suffix = if (suffix.isNotEmpty()) {
+                { Text(suffix, style = MaterialTheme.typography.bodySmall) }
+            } else null,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline
