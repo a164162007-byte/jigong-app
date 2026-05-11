@@ -15,10 +15,10 @@ import java.util.Locale
  * 支持导入与Web端兼容的JSON格式数据
  * 
  * 支持的JSON格式：
- * 1. App导出格式：{"app_source":"jigong-app","records":[...]}
- * 2. Web端导出格式：{"success":true,"data":{"records":[...]}}
- * 3. 简化格式：{"records":[...]}
- * 4. Docker导出格式：{"export_time":...,"export_type":...,"records":[...]}
+ * 1. Docker导出格式：{"export_time":...,"export_type":...,"records":[...]}
+ * 2. App导出格式：{"app_source":"jigong-app","records":[...]}
+ * 3. Web端API格式：{"success":true,"data":{"records":[...]}}
+ * 4. 简化格式：{"records":[...]}
  * 5. 直接数组格式：[...]
  */
 class DataImporter(private val context: Context) {
@@ -74,6 +74,13 @@ class DataImporter(private val context: Context) {
         val records: List<Map<String, Any>>? = null,
         val settings: Map<String, Any>? = null,
         val statistics: Map<String, Any>? = null
+    )
+    
+    /**
+     * 通用简化格式（只有records字段）
+     */
+    data class SimpleRecordsFormat(
+        val records: List<Map<String, Any>>? = null
     )
     
     /**
@@ -137,11 +144,22 @@ class DataImporter(private val context: Context) {
                 )
             }
             
-            // 尝试解析为App导出格式
+            // 尝试解析为App导出格式（必须有app_source字段才算是App格式）
             val appFormat = tryParse<AppExportFormat>(json)
-            if (appFormat != null && appFormat.records != null) {
+            if (appFormat != null && appFormat.appSource != null && appFormat.records != null) {
                 return processRecords(
                     appFormat.records,
+                    existingRecords,
+                    conflictStrategy
+                )
+            }
+            
+            // 尝试解析为通用格式（有records字段但无app_source和export_type）
+            // 这种情况处理简化格式 {"records":[...]}
+            val simpleFormat = tryParse<SimpleRecordsFormat>(json)
+            if (simpleFormat != null && simpleFormat.records != null) {
+                return processRecords(
+                    simpleFormat.records,
                     existingRecords,
                     conflictStrategy
                 )
@@ -268,7 +286,8 @@ class DataImporter(private val context: Context) {
     }
     
     /**
-     * 获取记录唯一键（日期+类型）
+     * 获取记录唯一键（日期+类型+工时+地点）
+     * 同一天可能有多条加班记录（不同时长/不同工地）
      */
     private fun getRecordKey(record: WorkRecord): String {
         val type = when {
@@ -276,7 +295,7 @@ class DataImporter(private val context: Context) {
             record.isManual -> "manual"
             else -> "standard"
         }
-        return "${record.date}_$type"
+        return "${record.date}_${type}_${record.hours}_${record.location}"
     }
     
     /**

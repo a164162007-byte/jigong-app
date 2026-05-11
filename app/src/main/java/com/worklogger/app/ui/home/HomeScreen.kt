@@ -274,8 +274,8 @@ fun HomeScreen(
             QuickCheckInDialog(
                 recentLocations = uiState.recentLocations,
                 onDismiss = { viewModel.cancelQuickCheckIn() },
-                onConfirm = { location ->
-                    viewModel.confirmQuickCheckIn(location)
+                onConfirm = { location, date ->
+                    viewModel.confirmQuickCheckIn(location, date)
                 }
             )
         }

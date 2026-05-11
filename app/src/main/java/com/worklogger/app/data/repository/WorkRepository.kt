@@ -31,15 +31,15 @@ class WorkRepository(
      * @return true 重复记工，false 新增记工
      */
     suspend fun insertIfNotExists(record: WorkRecord): Boolean {
-        // 构造唯一键
-        val key = "${record.date}_${record.isOvertime}_${record.isManual}"
+        // 构造唯一键（日期+类型+工时+地点），同一天可能有多条加班
+        val key = "${record.date}_${record.isOvertime}_${record.isManual}_${record.hours}_${record.location}"
         
         // 查询所有记工记录
         val allRecords = workRecordDao.getAllRecordsOnce()
         
         // 检查是否存在相同记录
         val exists = allRecords.any { r ->
-            "${r.date}_${r.isOvertime}_${r.isManual}" == key
+            "${r.date}_${r.isOvertime}_${r.isManual}_${r.hours}_${r.location}" == key
         }
         
         if (!exists) {

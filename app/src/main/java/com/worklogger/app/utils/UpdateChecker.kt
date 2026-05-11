@@ -27,7 +27,7 @@ class UpdateChecker {
     
     companion object {
         private const val GITHUB_API_URL = "https://api.github.com/repos/a164162007-byte/jigong-app/releases/latest"
-        private const val CURRENT_VERSION_NAME = "2.1.9.1"
+        private const val CURRENT_VERSION_NAME = "2.1.9.2"
         private const val CURRENT_VERSION_CODE = 2190
         private const val TOKEN_PART1 = "ghp_gmvJAdBv3DG21"
         private const val TOKEN_PART2 = "NmTnAi2cwbEOB6NMj3cTIbd"

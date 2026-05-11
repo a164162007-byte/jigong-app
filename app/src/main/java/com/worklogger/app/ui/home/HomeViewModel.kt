@@ -263,16 +263,14 @@ class HomeViewModel(
         }
     }
     
-    fun confirmQuickCheckIn(location: String) {
+    fun confirmQuickCheckIn(location: String, date: String = DateUtils.today()) {
         viewModelScope.launch {
-            val today = DateUtils.today()
-            
             // 一键记工：标准工（标准工时），强制饭补=true
             val record = WorkRecord(
-                date = today,
+                date = date,
                 hours = pendingQuickCheckInHours,
                 isOvertime = false,  // 标准工
-                location = location.trim(),  // 可以为空
+                location = location.trim(),
                 remark = "",
                 mealSubsidy = true,  // 标准工必须有饭补
                 isManual = false

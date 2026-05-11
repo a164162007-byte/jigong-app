@@ -24,6 +24,7 @@ import com.worklogger.app.model.WorkRecord
 import com.worklogger.app.ui.theme.*
 import com.worklogger.app.utils.DateUtils
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,19 +73,30 @@ fun AddRecordDialog(
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                // 日期选择
-                OutlinedTextField(
-                    value = DateUtils.formatDisplayFullDate(selectedDate),
-                    onValueChange = { },
-                    label = { Text("日期") },
-                    readOnly = true,
-                    trailingIcon = {
-                        Icon(Icons.Outlined.CalendarToday, contentDescription = null)
-                    },
+                // 日期选择 - 用Box包裹确保点击区域
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { showDatePicker = true }
-                )
+                ) {
+                    OutlinedTextField(
+                        value = DateUtils.formatDisplayFullDate(selectedDate),
+                        onValueChange = { },
+                        label = { Text("日期") },
+                        readOnly = true,
+                        trailingIcon = {
+                            Icon(Icons.Outlined.CalendarToday, contentDescription = null)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
@@ -344,18 +356,24 @@ fun AddRecordDialog(
 }
 
 /**
- * 一键记工对话框 - 仅用于快速记工时选择工地（可选）
+ * 一键记工对话框 - 支持选择日期和工地
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuickCheckInDialog(
     recentLocations: List<String> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (location: String) -> Unit
+    onConfirm: (location: String, date: String) -> Unit
 ) {
     var location by remember { mutableStateOf("") }
     var locationError by remember { mutableStateOf(false) }
     var showLocationDropdown by remember { mutableStateOf(false) }
+    var selectedDate by remember { mutableStateOf(DateUtils.today()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = DateUtils.parseDate(selectedDate)?.time ?: System.currentTimeMillis()
+    )
     
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -378,14 +396,34 @@ fun QuickCheckInDialog(
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                Text(
-                    text = "请输入工地名称",
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                // 日期选择
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showDatePicker = true }
+                ) {
+                    OutlinedTextField(
+                        value = DateUtils.formatDisplayFullDate(selectedDate),
+                        onValueChange = { },
+                        label = { Text("记工日期") },
+                        readOnly = true,
+                        trailingIcon = {
+                            Icon(Icons.Outlined.CalendarToday, contentDescription = null)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // 工地名称输入 - 不再必填
+                // 工地名称输入 - 必填
                 ExposedDropdownMenuBox(
                     expanded = showLocationDropdown && recentLocations.isNotEmpty(),
                     onExpandedChange = { showLocationDropdown = it }
@@ -397,7 +435,11 @@ fun QuickCheckInDialog(
                             locationError = false
                             showLocationDropdown = true
                         },
-                        label = { Text("工地名称") },  // 去掉 * 标记
+                        label = { Text("工地名称 *") },
+                        isError = locationError,
+                        supportingText = if (locationError) {
+                            { Text("请输入工地名称", color = MaterialTheme.colorScheme.error) }
+                        } else null,
                         trailingIcon = {
                             ExposedDropdownMenuDefaults.TrailingIcon(expanded = showLocationDropdown)
                         },
@@ -429,7 +471,7 @@ fun QuickCheckInDialog(
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                // 按钮 - location为空也允许
+                // 按钮
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -442,12 +484,11 @@ fun QuickCheckInDialog(
                     }
                     Button(
                         onClick = {
-                            // location可以为空
                             if (location.isBlank()) {
                                 locationError = true
                                 return@Button
                             }
-                            onConfirm(location.trim())
+                            onConfirm(location.trim(), selectedDate)
                         },
                         modifier = Modifier.weight(1f)
                     ) {
@@ -455,6 +496,33 @@ fun QuickCheckInDialog(
                     }
                 }
             }
+        }
+    }
+    
+    // 日期选择器
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            selectedDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                .format(Date(millis))
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("确认")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("取消")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
         }
     }
 }
