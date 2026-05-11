@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 data class HomeUiState(
     val currentMonth: String = DateUtils.currentYearMonth(),
     val totalHours: Double = 0.0,
+    val totalStandardDays: Double = 0.0, // 标准工总数
     val totalWage: Double = 0.0,
     val progress: Float = 0f,
     val recentRecords: List<WorkRecord> = emptyList(),
@@ -99,6 +100,7 @@ class HomeViewModel(
         _uiState.update {
             it.copy(
                 totalHours = totalHours,
+                totalStandardDays = stats.totalStandard,
                 totalWage = totalWage,
                 progress = progress,
                 recentRecords = records.take(10),

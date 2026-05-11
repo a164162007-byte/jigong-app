@@ -8,6 +8,7 @@ import com.worklogger.app.data.remote.CloudSyncService
 import com.worklogger.app.model.WorkRecord
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.util.Locale
 
 /**
  * 数据导入工具
@@ -17,7 +18,8 @@ import java.io.InputStreamReader
  * 1. App导出格式：{"app_source":"jigong-app","records":[...]}
  * 2. Web端导出格式：{"success":true,"data":{"records":[...]}}
  * 3. 简化格式：{"records":[...]}
- * 4. 直接数组格式：[...]
+ * 4. Docker导出格式：{"export_time":...,"export_type":...,"records":[...]}
+ * 5. 直接数组格式：[...]
  */
 class DataImporter(private val context: Context) {
     
@@ -75,6 +77,17 @@ class DataImporter(private val context: Context) {
     )
     
     /**
+     * Docker导出格式
+     */
+    data class DockerExportFormat(
+        @SerializedName("export_time")
+        val exportTime: String? = null,
+        @SerializedName("export_type")
+        val exportType: String? = null,
+        val records: List<Map<String, Any>>? = null
+    )
+    
+    /**
      * 从URI导入数据
      * 
      * @param uri 文件URI
@@ -114,6 +127,16 @@ class DataImporter(private val context: Context) {
         conflictStrategy: ConflictStrategy = ConflictStrategy.SKIP
     ): ImportResult {
         return try {
+            // 尝试解析为Docker导出格式
+            val dockerFormat = tryParse<DockerExportFormat>(json)
+            if (dockerFormat != null && dockerFormat.records != null) {
+                return processRecords(
+                    dockerFormat.records,
+                    existingRecords,
+                    conflictStrategy
+                )
+            }
+            
             // 尝试解析为App导出格式
             val appFormat = tryParse<AppExportFormat>(json)
             if (appFormat != null && appFormat.records != null) {
@@ -270,10 +293,16 @@ class DataImporter(private val context: Context) {
                     java.time.Instant.parse(value).toEpochMilli()
                 } catch (e: Exception) {
                     try {
-                        // 尝试解析为时间戳字符串
-                        value.toLong()
+                        // 尝试解析为 yyyy-MM-dd HH:mm:ss 格式（Docker导出格式）
+                        val formatter = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                        formatter.parse(value)?.time ?: System.currentTimeMillis()
                     } catch (e: Exception) {
-                        System.currentTimeMillis()
+                        try {
+                            // 尝试解析为时间戳字符串
+                            value.toLong()
+                        } catch (e: Exception) {
+                            System.currentTimeMillis()
+                        }
                     }
                 }
             }

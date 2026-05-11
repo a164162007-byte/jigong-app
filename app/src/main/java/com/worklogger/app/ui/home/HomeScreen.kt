@@ -106,7 +106,7 @@ fun HomeScreen(
                         StatsCard(
                             title = "本月工时",
                             value = String.format("%.1f", uiState.totalHours),
-                            subtitle = "小时",
+                            subtitle = String.format("%.1f 标准工", uiState.totalStandardDays),
                             color = Primary,
                             modifier = Modifier.weight(1f)
                         )

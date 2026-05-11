@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -332,6 +334,13 @@ fun StatsScreen(
                             }
                         }
                     }
+                }
+                
+                // 本月记工明细折叠栏
+                item {
+                    MonthlyDetailCard(
+                        records = uiState.monthlyDetailRecords
+                    )
                 }
                 
                 item {
@@ -675,5 +684,145 @@ private fun formatDiff(value: Double): String {
         value > 0 -> "+${String.format("%.1f", value)}"
         value < 0 -> String.format("%.1f", value)
         else -> "0"
+    }
+}
+
+@Composable
+fun MonthlyDetailCard(
+    records: List<com.worklogger.app.model.WorkRecord>
+) {
+    var expanded by remember { mutableStateOf(false) }
+    
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // 点击展开/折叠的标题行
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "本月记工明细 (${records.size}条)",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        imageVector = if (expanded) {
+                            Icons.Default.KeyboardArrowUp
+                        } else {
+                            Icons.Default.KeyboardArrowDown
+                        },
+                        contentDescription = if (expanded) "收起" else "展开"
+                    )
+                }
+            }
+            
+            // 展开时显示详细列表
+            if (expanded) {
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                if (records.isEmpty()) {
+                    Text(
+                        text = "暂无记录",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    records.forEach { record ->
+                        RecordDetailItem(record = record)
+                        if (record != records.last()) {
+                            Divider(
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecordDetailItem(record: com.worklogger.app.model.WorkRecord) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // 第一行：日期 + 类型 + 工时
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = record.date,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+            
+            val typeText = when {
+                record.isOvertime -> "加班"
+                record.isManual -> "手动折算"
+                else -> "标准工"
+            }
+            val typeColor = when {
+                record.isOvertime -> RecordOvertime
+                record.isManual -> RecordManual
+                else -> RecordStandard
+            }
+            
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = typeText,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = typeColor
+                )
+                Text(
+                    text = "${String.format("%.1f", record.hours)}小时",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(4.dp))
+        
+        // 第二行：工地 + 饭补
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = if (record.location.isNotEmpty()) record.location else "未填写工地",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = if (record.mealSubsidy) "有饭补" else "无饭补",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (record.mealSubsidy) Success else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        // 第三行：备注（如果有）
+        if (record.remark.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = record.remark,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }

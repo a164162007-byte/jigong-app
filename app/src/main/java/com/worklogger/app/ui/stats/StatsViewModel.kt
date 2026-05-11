@@ -23,6 +23,7 @@ data class StatsUiState(
     val totalOvertimeDays: Double = 0.0,
     val totalOvertimeHours: Double = 0.0,
     val recentRecords: List<WorkRecord> = emptyList(),
+    val monthlyDetailRecords: List<WorkRecord> = emptyList(), // 月度详细记录（按日期倒序）
     val settings: UserSettings = UserSettings(),
     val monthlyTrend: List<Pair<String, Double>> = emptyList(), // yearMonth -> totalHours
     val locationDistribution: Map<String, Int> = emptyMap(), // location -> count
@@ -111,6 +112,9 @@ class StatsViewModel(
             .groupBy { it.location.ifEmpty { "未填写" } }
             .mapValues { it.value.size }
         
+        // 计算月度详细记录（按日期倒序）
+        val sortedDetailRecords = records.sortedByDescending { it.date }
+        
         _uiState.update {
             it.copy(
                 currentStats = stats,
@@ -120,6 +124,7 @@ class StatsViewModel(
                 totalOvertimeDays = totalDays,
                 totalOvertimeHours = totalHours,
                 recentRecords = records,
+                monthlyDetailRecords = sortedDetailRecords,
                 locationDistribution = locationDist,
                 isLoading = false
             )
