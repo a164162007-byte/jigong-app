@@ -244,6 +244,7 @@ class HomeViewModel(
         }
         
         _uiState.update { it.copy(showAddDialog = false, editingRecord = null) }
+        refreshData()
     }
     
     fun quickCheckIn() {
@@ -277,6 +278,7 @@ class HomeViewModel(
             
             workRepository.insert(record)
             _uiState.update { it.copy(showQuickCheckInDialog = false) }
+            refreshData()
         }
     }
     
@@ -298,6 +300,7 @@ class HomeViewModel(
                 workRepository.softDeleteRecord(id.toLong())
             }
             _uiState.update { it.copy(showDeleteConfirm = false, deleteRecordId = null) }
+            refreshData()
         }
     }
     
