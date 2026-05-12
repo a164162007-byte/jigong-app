@@ -168,7 +168,7 @@ fun MainScreen(app: WorkLoggerApp) {
             
             composable(Screen.Calendar.route) {
                 val viewModel = androidx.lifecycle.viewmodel.compose.viewModel<CalendarViewModel>(
-                    factory = CalendarViewModelFactory(app.workRepository)
+                    factory = CalendarViewModelFactory(app.workRepository, app.settingsRepository)
                 )
                 CalendarScreen(viewModel = viewModel)
             }

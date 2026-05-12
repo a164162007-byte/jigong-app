@@ -58,7 +58,9 @@ data class UserSettings(
     val cloudServerUrl: String = "",        // 云服务器地址（用户自行配置）
     val cloudUsername: String = "",         // 云服务器用户名
     val cloudPassword: String = "",         // 云服务器密码
-    val cloudLastSyncTime: Long = 0L       // 上次同步时间
+    val cloudLastSyncTime: Long = 0L,       // 上次同步时间
+    val cloudLoggedIn: Boolean = false,      // 云端登录状态
+    val cloudLoginTime: Long = 0L            // 登录时间
 )
 
 /**

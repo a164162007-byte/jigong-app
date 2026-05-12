@@ -55,5 +55,11 @@ class SettingsRepository(private val settingsDataStore: SettingsDataStore) {
     suspend fun updateCloudLastSyncTime(time: Long) = 
         settingsDataStore.updateCloudLastSyncTime(time)
     
+    suspend fun updateCloudLoggedIn(loggedIn: Boolean) = 
+        settingsDataStore.updateCloudLoggedIn(loggedIn)
+    
+    suspend fun updateCloudLoginTime(time: Long) = 
+        settingsDataStore.updateCloudLoginTime(time)
+    
     suspend fun clearAllSettings() = settingsDataStore.clearAll()
 }

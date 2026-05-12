@@ -33,6 +33,8 @@ class SettingsDataStore(private val context: Context) {
         private val CLOUD_USERNAME = stringPreferencesKey("cloud_username")
         private val CLOUD_PASSWORD = stringPreferencesKey("cloud_password")
         private val CLOUD_LAST_SYNC_TIME = longPreferencesKey("cloud_last_sync_time")
+    private val CLOUD_LOGGED_IN = booleanPreferencesKey("cloud_logged_in")
+    private val CLOUD_LOGIN_TIME = longPreferencesKey("cloud_login_time")
     }
     
     val settings: Flow<UserSettings> = context.dataStore.data.map { preferences ->
