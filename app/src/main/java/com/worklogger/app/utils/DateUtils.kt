@@ -163,6 +163,19 @@ object DateUtils {
     }
     
     fun isToday(date: String): Boolean = date == today()
+
+    fun getYearMonthNextFirstDay(yearMonth: String): String {
+        val parts = yearMonth.split("-")
+        if (parts.size != 2) return yearMonth
+        val year = parts[0].toInt()
+        val month = parts[1].toInt()
+        return if (month == 12) {
+            String.format("%04d-01-01", year + 1)
+        } else {
+            String.format("%04d-%02d-01", year, month + 1)
+        }
+    }
+
     
     fun formatTime(hour: Int, minute: Int): String {
         return String.format("%02d:%02d", hour, minute)
