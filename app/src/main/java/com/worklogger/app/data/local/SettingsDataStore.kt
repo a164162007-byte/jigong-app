@@ -55,7 +55,9 @@ class SettingsDataStore(private val context: Context) {
             cloudServerUrl = preferences[CLOUD_SERVER_URL] ?: "",
             cloudUsername = preferences[CLOUD_USERNAME] ?: "",
             cloudPassword = preferences[CLOUD_PASSWORD] ?: "",
-            cloudLastSyncTime = preferences[CLOUD_LAST_SYNC_TIME] ?: 0L
+            cloudLastSyncTime = preferences[CLOUD_LAST_SYNC_TIME] ?: 0L,
+            cloudLoggedIn = preferences[CLOUD_LOGGED_IN] ?: false,
+            cloudLoginTime = preferences[CLOUD_LOGIN_TIME] ?: 0L
         )
     }
     
@@ -78,6 +80,8 @@ class SettingsDataStore(private val context: Context) {
             preferences[CLOUD_USERNAME] = settings.cloudUsername
             preferences[CLOUD_PASSWORD] = settings.cloudPassword
             preferences[CLOUD_LAST_SYNC_TIME] = settings.cloudLastSyncTime
+            preferences[CLOUD_LOGGED_IN] = settings.cloudLoggedIn
+            preferences[CLOUD_LOGIN_TIME] = settings.cloudLoginTime
         }
     }
     
@@ -144,6 +148,14 @@ class SettingsDataStore(private val context: Context) {
     
     suspend fun updateCloudLastSyncTime(time: Long) {
         context.dataStore.edit { it[CLOUD_LAST_SYNC_TIME] = time }
+    }
+    
+    suspend fun updateCloudLoggedIn(loggedIn: Boolean) {
+        context.dataStore.edit { it[CLOUD_LOGGED_IN] = loggedIn }
+    }
+    
+    suspend fun updateCloudLoginTime(time: Long) {
+        context.dataStore.edit { it[CLOUD_LOGIN_TIME] = time }
     }
     
     suspend fun clearAll() {

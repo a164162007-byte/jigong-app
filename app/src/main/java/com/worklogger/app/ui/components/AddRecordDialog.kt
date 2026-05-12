@@ -313,11 +313,17 @@ fun AddRecordDialog(
 fun QuickCheckInDialog(
     recentLocations: List<String> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (location: String) -> Unit
+    onConfirm: (location: String, date: String) -> Unit
 ) {
     var location by remember { mutableStateOf("") }
     var locationError by remember { mutableStateOf(false) }
     var showLocationDropdown by remember { mutableStateOf(false) }
+    var selectedDate by remember { mutableStateOf(DateUtils.today()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = DateUtils.parseDate(selectedDate)?.time ?: System.currentTimeMillis()
+    )
     
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -337,7 +343,34 @@ fun QuickCheckInDialog(
                     fontWeight = FontWeight.Bold
                 )
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 日期选择
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showDatePicker = true }
+                ) {
+                    OutlinedTextField(
+                        value = DateUtils.formatDisplayFullDate(selectedDate),
+                        onValueChange = { },
+                        label = { Text("记工日期") },
+                        readOnly = true,
+                        trailingIcon = {
+                            Icon(Icons.Outlined.CalendarToday, contentDescription = null)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
                 
                 ExposedDropdownMenuBox(
                     expanded = showLocationDropdown && recentLocations.isNotEmpty(),
@@ -397,7 +430,7 @@ fun QuickCheckInDialog(
                                 locationError = true
                                 return@Button
                             }
-                            onConfirm(location.trim())
+                            onConfirm(location.trim(), selectedDate)
                         },
                         modifier = Modifier.weight(1f)
                     ) {
@@ -405,6 +438,33 @@ fun QuickCheckInDialog(
                     }
                 }
             }
+        }
+    }
+    
+    // 日期选择器
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            selectedDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                .format(Date(millis))
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("确认")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("取消")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
         }
     }
 }
