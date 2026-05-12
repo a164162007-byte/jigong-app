@@ -298,9 +298,7 @@ fun HomeScreen(
                 title = "工时异常提醒",
                 message = "您输入的工时为 ${uiState.warningHours} 小时，超过12小时或不足1小时，请确认。",
                 confirmText = "继续保存",
-                onConfirm = {
-                    // 需要再次传入参数才能确认，这里简化处理
-                },
+                onConfirm = { viewModel.confirmSaveAnyway() },
                 onDismiss = { viewModel.cancelHoursWarning() }
             )
         }
@@ -311,9 +309,7 @@ fun HomeScreen(
                 title = "重复记录提醒",
                 message = "${DateUtils.formatDisplayFullDate(uiState.duplicateDate)} 已有记录，是否继续添加？",
                 confirmText = "继续添加",
-                onConfirm = {
-                    // 需要再次传入参数才能确认，这里简化处理
-                },
+                onConfirm = { viewModel.confirmDuplicateAnyway() },
                 onDismiss = { viewModel.cancelDuplicateWarning() }
             )
         }
