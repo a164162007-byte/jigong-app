@@ -27,6 +27,13 @@ data class StatsUiState(
     val settings: UserSettings = UserSettings(),
     val monthlyTrend: List<Pair<String, Double>> = emptyList(), // yearMonth -> totalHours
     val locationDistribution: Map<String, Int> = emptyMap(), // location -> count
+    val recentLocations: List<String> = emptyList(),
+    // 编辑功能
+    val showEditDialog: Boolean = false,
+    val editingRecord: WorkRecord? = null,
+    // 删除功能
+    val showDeleteConfirm: Boolean = false,
+    val deletingRecord: WorkRecord? = null,
     val isLoading: Boolean = true
 )
 
@@ -112,6 +119,16 @@ class StatsViewModel(
         // 计算月度详细记录（按日期倒序）
         val sortedDetailRecords = records.sortedByDescending { it.date }
         
+        // 获取最近工地列表
+        val allRecords = workRepository.allRecords.first()
+        val recentLocs = allRecords
+            .filter { it.location.isNotEmpty() }
+            .groupBy { it.location }
+            .mapValues { it.value.size }
+            .entries.sortedByDescending { it.value }
+            .take(10)
+            .map { it.key }
+        
         _uiState.update {
             it.copy(
                 currentStats = stats,
@@ -123,6 +140,7 @@ class StatsViewModel(
                 recentRecords = records,
                 monthlyDetailRecords = sortedDetailRecords,
                 locationDistribution = locationDist,
+                recentLocations = recentLocs,
                 isLoading = false
             )
         }
@@ -183,6 +201,52 @@ class StatsViewModel(
     fun refresh() {
         _uiState.update { it.copy(isLoading = true) }
         viewModelScope.launch { loadStatsData() }
+    }
+    
+    // ========== 编辑功能 ==========
+    
+    fun showEditDialog(record: WorkRecord) {
+        _uiState.update { it.copy(showEditDialog = true, editingRecord = record) }
+    }
+    
+    fun hideEditDialog() {
+        _uiState.update { it.copy(showEditDialog = false, editingRecord = null) }
+    }
+    
+    fun saveEditedRecord(date: String, hours: Double, isOvertime: Boolean, location: String, remark: String, mealSubsidy: Boolean, isManual: Boolean) {
+        val record = _uiState.value.editingRecord ?: return
+        viewModelScope.launch {
+            val updatedRecord = record.copy(
+                date = date, hours = hours, isOvertime = isOvertime,
+                location = location, remark = remark, mealSubsidy = mealSubsidy,
+                isManual = isManual, updatedAt = System.currentTimeMillis()
+            )
+            workRepository.update(updatedRecord)
+            hideEditDialog()
+            refresh()
+        }
+    }
+    
+    // ========== 删除功能 ==========
+    
+    fun showDeleteConfirm(record: WorkRecord) {
+        _uiState.update { it.copy(showDeleteConfirm = true, deletingRecord = record) }
+    }
+    
+    fun hideDeleteConfirm() {
+        _uiState.update { it.copy(showDeleteConfirm = false, deletingRecord = null) }
+    }
+    
+    fun confirmDelete() {
+        val record = _uiState.value.deletingRecord ?: return
+        viewModelScope.launch {
+            val deletedRecord = record.copy(
+                isDeleted = true, deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()
+            )
+            workRepository.update(deletedRecord)
+            hideDeleteConfirm()
+            refresh()
+        }
     }
 }
 

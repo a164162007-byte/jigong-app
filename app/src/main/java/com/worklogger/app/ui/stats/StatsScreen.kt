@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -27,6 +29,9 @@ import com.github.mikephil.charting.charts.PieChart
 import com.github.mikephil.charting.components.XAxis
 import com.github.mikephil.charting.data.*
 import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
+import com.worklogger.app.model.WorkRecord
+import com.worklogger.app.ui.components.AddRecordDialog
+import com.worklogger.app.ui.components.ConfirmDialog
 import com.worklogger.app.ui.components.StatsCard
 import com.worklogger.app.ui.theme.*
 import com.worklogger.app.utils.DateUtils
@@ -823,6 +828,97 @@ private fun RecordDetailItem(record: com.worklogger.app.model.WorkRecord) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun RecordDetailItemWithActions(
+    record: WorkRecord,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = record.date,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val typeText = when {
+                    record.isOvertime -> "加班"
+                    record.isManual -> "手动折算"
+                    else -> "标准工"
+                }
+                val typeColor = when {
+                    record.isOvertime -> RecordOvertime
+                    record.isManual -> RecordManual
+                    else -> RecordStandard
+                }
+                Text(text = typeText, style = MaterialTheme.typography.labelMedium, color = typeColor)
+                Text(text = "${String.format("%.1f", record.hours)}小时", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Edit, contentDescription = "编辑", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                }
+                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(text = if (record.location.isNotEmpty()) record.location else "未填写工地", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(text = if (record.mealSubsidy) "有饭补" else "无饭补", style = MaterialTheme.typography.bodySmall, color = if (record.mealSubsidy) Success else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (record.remark.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = record.remark, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+fun MonthlyDetailCardWithActions(
+    records: List<WorkRecord>,
+    onEdit: (WorkRecord) -> Unit,
+    onDelete: (WorkRecord) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "本月记工明细 (${records.size}条)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = if (expanded) "收起" else "展开")
+                }
+            }
+            
+            if (expanded) {
+                Spacer(modifier = Modifier.height(8.dp))
+                if (records.isEmpty()) {
+                    Text(text = "暂无记录", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    records.forEach { record ->
+                        RecordDetailItemWithActions(record = record, onEdit = { onEdit(record) }, onDelete = { onDelete(record) })
+                        if (record != records.last()) {
+                            Divider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                        }
+                    }
+                }
+            }
         }
     }
 }

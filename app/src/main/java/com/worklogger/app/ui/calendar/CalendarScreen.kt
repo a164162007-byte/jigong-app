@@ -10,6 +10,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.*
@@ -26,6 +28,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.worklogger.app.model.WorkRecord
+import com.worklogger.app.ui.components.AddRecordDialog
+import com.worklogger.app.ui.components.ConfirmDialog
 import com.worklogger.app.ui.theme.*
 import com.worklogger.app.utils.DateUtils
 import java.util.*
@@ -37,7 +41,6 @@ fun CalendarScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
-    // 页面恢复时自动刷新数据
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -72,7 +75,6 @@ fun CalendarScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // 月份导航
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -95,12 +97,7 @@ fun CalendarScreen(
                 }
             }
             
-            // 星期标题
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
-            ) {
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                 listOf("日", "一", "二", "三", "四", "五", "六").forEach { day ->
                     Text(
                         text = day,
@@ -114,7 +111,6 @@ fun CalendarScreen(
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            // 日历网格
             CalendarGrid(
                 year = uiState.currentYear,
                 month = uiState.currentMonth,
@@ -123,12 +119,35 @@ fun CalendarScreen(
             )
         }
         
-        // 日期详情弹窗
         if (uiState.showDetailDialog && uiState.selectedDate != null) {
             RecordDetailDialog(
                 date = uiState.selectedDate!!,
                 records = uiState.selectedRecords,
-                onDismiss = { viewModel.hideDetailDialog() }
+                onDismiss = { viewModel.hideDetailDialog() },
+                onEdit = { record -> viewModel.showEditDialog(record) },
+                onDelete = { record -> viewModel.showDeleteConfirm(record) }
+            )
+        }
+        
+        if (uiState.showEditDialog && uiState.editingRecord != null) {
+            AddRecordDialog(
+                record = uiState.editingRecord,
+                recentLocations = uiState.recentLocations,
+                onDismiss = { viewModel.hideEditDialog() },
+                onSave = { date, hours, isOvertime, location, remark, mealSubsidy, isManual ->
+                    viewModel.saveEditedRecord(date, hours, isOvertime, location, remark, mealSubsidy, isManual)
+                }
+            )
+        }
+        
+        if (uiState.showDeleteConfirm && uiState.deletingRecord != null) {
+            ConfirmDialog(
+                title = "确认删除",
+                message = "确定要删除这条记录吗？删除后可从回收站恢复。",
+                confirmText = "删除",
+                onConfirm = { viewModel.confirmDelete() },
+                onDismiss = { viewModel.hideDeleteConfirm() },
+                isDangerous = true
             )
         }
     }
@@ -142,41 +161,29 @@ fun CalendarGrid(
     onDateClick: (String) -> Unit
 ) {
     val daysInMonth = DateUtils.getMonthDays(year, month)
-    
-    // 计算第一天是星期几
     val calendar = Calendar.getInstance()
     calendar.set(year, month - 1, 1)
     val firstDayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
-    
-    // 计算需要填充的空白天数
     val emptyDays = firstDayOfWeek - Calendar.SUNDAY
-    
-    // 生成日期列表
     val days = (1..daysInMonth).map { day ->
         String.format("%04d-%02d-%02d", year, month, day)
     }
     
     LazyVerticalGrid(
         columns = GridCells.Fixed(7),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
         contentPadding = PaddingValues(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // 空白填充
         items(emptyDays) {
             Box(modifier = Modifier.aspectRatio(1f))
         }
         
-        // 日期
         items(days) { date ->
             val records = recordsByDate[date] ?: emptyList()
             val isToday = date == DateUtils.today()
             val hasRecords = records.isNotEmpty()
-            
-            // 判断记录类型
             val recordColor = when {
                 records.isEmpty() -> null
                 records.any { it.isOvertime } -> RecordOvertime
@@ -207,35 +214,19 @@ fun DayCell(
         modifier = Modifier
             .aspectRatio(1f)
             .clip(RoundedCornerShape(8.dp))
-            .then(
-                if (isToday) Modifier.border(
-                    2.dp,
-                    Primary,
-                    RoundedCornerShape(8.dp)
-                ) else Modifier
-            )
+            .then(if (isToday) Modifier.border(2.dp, Primary, RoundedCornerShape(8.dp)) else Modifier)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text(
                 text = day.toString(),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (isToday) Primary 
-                       else MaterialTheme.colorScheme.onSurface
+                color = if (isToday) Primary else MaterialTheme.colorScheme.onSurface
             )
-            
             if (hasRecords && recordColor != null) {
                 Spacer(modifier = Modifier.height(2.dp))
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(recordColor)
-                )
+                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(recordColor))
             }
         }
     }
@@ -245,18 +236,16 @@ fun DayCell(
 fun RecordDetailDialog(
     date: String,
     records: List<WorkRecord>,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onEdit: (WorkRecord) -> Unit,
+    onDelete: (WorkRecord) -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             shape = MaterialTheme.shapes.large
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp)
-            ) {
+            Column(modifier = Modifier.padding(24.dp)) {
                 Text(
                     text = DateUtils.formatDisplayFullDate(date),
                     style = MaterialTheme.typography.titleLarge,
@@ -271,7 +260,11 @@ fun RecordDetailDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 records.forEach { record ->
-                    RecordDetailItem(record)
+                    RecordDetailItemWithActions(
+                        record = record,
+                        onEdit = { onEdit(record) },
+                        onDelete = { onDelete(record) }
+                    )
                     if (record != records.last()) {
                         Divider(modifier = Modifier.padding(vertical = 8.dp))
                     }
@@ -279,19 +272,11 @@ fun RecordDetailDialog(
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // 汇总
                 val totalHours = records.sumOf { it.hours }
                 val hasMealSubsidy = records.any { it.mealSubsidy && !it.isOvertime }
                 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "合计",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(text = "合计", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Text(
                         text = "${totalHours}小时${if (hasMealSubsidy) " + 饭补" else ""}",
                         style = MaterialTheme.typography.titleSmall,
@@ -302,10 +287,7 @@ fun RecordDetailDialog(
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.End)
-                ) {
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
                     Text("关闭")
                 }
             }
@@ -314,22 +296,20 @@ fun RecordDetailDialog(
 }
 
 @Composable
-fun RecordDetailItem(record: WorkRecord) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+fun RecordDetailItemWithActions(
+    record: WorkRecord,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(
-                    when {
-                        record.isOvertime -> RecordOvertime
-                        record.isManual -> RecordManual
-                        else -> RecordStandard
-                    }
-                )
+            modifier = Modifier.size(8.dp).clip(CircleShape).background(
+                when {
+                    record.isOvertime -> RecordOvertime
+                    record.isManual -> RecordManual
+                    else -> RecordStandard
+                }
+            )
         )
         
         Spacer(modifier = Modifier.width(12.dp))
@@ -350,6 +330,14 @@ fun RecordDetailItem(record: WorkRecord) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+        
+        IconButton(onClick = onEdit) {
+            Icon(Icons.Default.Edit, contentDescription = "编辑", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+        }
+        
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Default.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
         }
     }
 }

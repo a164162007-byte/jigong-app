@@ -269,6 +269,18 @@ def init_db():
     ''')
     
     conn.commit()
+    
+    # 创建默认管理员用户（如果不存在）
+    cursor.execute('SELECT id FROM users WHERE username = ?', ('admin',))
+    if not cursor.fetchone():
+        # 创建默认admin用户，密码为 admin123
+        hashed_password, salt = hash_password('admin123')
+        cursor.execute(
+            'INSERT INTO users (username, password, salt) VALUES (?, ?, ?)',
+            ('admin', hashed_password, salt)
+        )
+        conn.commit()
+    
     conn.close()
 
 

@@ -3,6 +3,7 @@ package com.worklogger.app.ui.calendar
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.worklogger.app.data.repository.SettingsRepository
 import com.worklogger.app.data.repository.WorkRepository
 import com.worklogger.app.model.WorkRecord
 import com.worklogger.app.utils.DateUtils
@@ -16,11 +17,17 @@ data class CalendarUiState(
     val selectedDate: String? = null,
     val selectedRecords: List<WorkRecord> = emptyList(),
     val showDetailDialog: Boolean = false,
+    val recentLocations: List<String> = emptyList(),
+    val showEditDialog: Boolean = false,
+    val editingRecord: WorkRecord? = null,
+    val showDeleteConfirm: Boolean = false,
+    val deletingRecord: WorkRecord? = null,
     val isLoading: Boolean = true
 )
 
 class CalendarViewModel(
-    private val workRepository: WorkRepository
+    private val workRepository: WorkRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(CalendarUiState())
@@ -28,6 +35,7 @@ class CalendarViewModel(
     
     init {
         loadData()
+        loadRecentLocations()
     }
     
     private fun loadData() {
@@ -39,11 +47,21 @@ class CalendarViewModel(
         viewModelScope.launch {
             val records = workRepository.getRecordsByDateRange(startDate, endDate)
             val grouped = records.groupBy { it.date }
-            _uiState.update {
-                it.copy(
-                    recordsByDate = grouped,
-                    isLoading = false
-                )
+            _uiState.update { it.copy(recordsByDate = grouped, isLoading = false) }
+        }
+    }
+    
+    private fun loadRecentLocations() {
+        viewModelScope.launch {
+            workRepository.allRecords.collect { allRecords ->
+                val recentLocs = allRecords
+                    .filter { it.location.isNotEmpty() }
+                    .groupBy { it.location }
+                    .mapValues { it.value.size }
+                    .entries.sortedByDescending { it.value }
+                    .take(10)
+                    .map { it.key }
+                _uiState.update { it.copy(recentLocations = recentLocs) }
             }
         }
     }
@@ -52,13 +70,7 @@ class CalendarViewModel(
         _uiState.update {
             val newMonth = if (it.currentMonth == 1) 12 else it.currentMonth - 1
             val newYear = if (it.currentMonth == 1) it.currentYear - 1 else it.currentYear
-            it.copy(
-                currentYear = newYear,
-                currentMonth = newMonth,
-                selectedDate = null,
-                selectedRecords = emptyList(),
-                isLoading = true
-            )
+            it.copy(currentYear = newYear, currentMonth = newMonth, selectedDate = null, selectedRecords = emptyList(), isLoading = true)
         }
         loadData()
     }
@@ -67,57 +79,79 @@ class CalendarViewModel(
         _uiState.update {
             val newMonth = if (it.currentMonth == 12) 1 else it.currentMonth + 1
             val newYear = if (it.currentMonth == 12) it.currentYear + 1 else it.currentYear
-            // 不能超过当前月份
             val currentYearMonth = DateUtils.currentYearMonth()
             val newYearMonth = String.format("%04d-%02d", newYear, newMonth)
-            if (newYearMonth > currentYearMonth) {
-                return@update it
-            }
-            it.copy(
-                currentYear = newYear,
-                currentMonth = newMonth,
-                selectedDate = null,
-                selectedRecords = emptyList(),
-                isLoading = true
-            )
+            if (newYearMonth > currentYearMonth) return@update it
+            it.copy(currentYear = newYear, currentMonth = newMonth, selectedDate = null, selectedRecords = emptyList(), isLoading = true)
         }
         loadData()
     }
     
     fun selectDate(date: String) {
         val records = _uiState.value.recordsByDate[date] ?: emptyList()
-        _uiState.update {
-            it.copy(
-                selectedDate = date,
-                selectedRecords = records,
-                showDetailDialog = records.isNotEmpty()
-            )
-        }
+        _uiState.update { it.copy(selectedDate = date, selectedRecords = records, showDetailDialog = records.isNotEmpty()) }
     }
     
     fun hideDetailDialog() {
-        _uiState.update {
-            it.copy(
-                showDetailDialog = false,
-                selectedDate = null,
-                selectedRecords = emptyList()
-            )
-        }
+        _uiState.update { it.copy(showDetailDialog = false, selectedDate = null, selectedRecords = emptyList()) }
     }
     
     fun refresh() {
         _uiState.update { it.copy(isLoading = true) }
         loadData()
     }
+    
+    fun showEditDialog(record: WorkRecord) {
+        _uiState.update { it.copy(showEditDialog = true, editingRecord = record, showDetailDialog = false) }
+    }
+    
+    fun hideEditDialog() {
+        _uiState.update { it.copy(showEditDialog = false, editingRecord = null) }
+    }
+    
+    fun saveEditedRecord(date: String, hours: Double, isOvertime: Boolean, location: String, remark: String, mealSubsidy: Boolean, isManual: Boolean) {
+        val record = _uiState.value.editingRecord ?: return
+        viewModelScope.launch {
+            val updatedRecord = record.copy(
+                date = date, hours = hours, isOvertime = isOvertime,
+                location = location, remark = remark, mealSubsidy = mealSubsidy,
+                isManual = isManual, updatedAt = System.currentTimeMillis()
+            )
+            workRepository.update(updatedRecord)
+            hideEditDialog()
+            refresh()
+        }
+    }
+    
+    fun showDeleteConfirm(record: WorkRecord) {
+        _uiState.update { it.copy(showDeleteConfirm = true, deletingRecord = record, showDetailDialog = false) }
+    }
+    
+    fun hideDeleteConfirm() {
+        _uiState.update { it.copy(showDeleteConfirm = false, deletingRecord = null) }
+    }
+    
+    fun confirmDelete() {
+        val record = _uiState.value.deletingRecord ?: return
+        viewModelScope.launch {
+            val deletedRecord = record.copy(
+                isDeleted = true, deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()
+            )
+            workRepository.update(deletedRecord)
+            hideDeleteConfirm()
+            refresh()
+        }
+    }
 }
 
 class CalendarViewModelFactory(
-    private val workRepository: WorkRepository
+    private val workRepository: WorkRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(CalendarViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return CalendarViewModel(workRepository) as T
+            return CalendarViewModel(workRepository, settingsRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

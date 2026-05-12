@@ -1467,6 +1467,63 @@ def api_change_password():
 
 
 # ============================================================================
+# 管理员API
+# ============================================================================
+
+@app.route('/api/admin/users', methods=['GET'])
+@login_required
+def api_admin_list_users():
+    """
+    获取用户列表（仅admin用户可访问）
+    """
+    if session.get('username') != 'admin':
+        return jsonify({'success': False, 'message': '无权限，只有管理员可以访问'})
+    
+    conn = models.get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, username, created_at FROM users ORDER BY id')
+    users = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return jsonify({'success': True, 'data': users})
+
+
+@app.route('/api/admin/reset-password', methods=['POST'])
+@login_required
+def api_admin_reset_password():
+    """
+    管理员重置用户密码（仅admin用户可访问）
+    """
+    if session.get('username') != 'admin':
+        return jsonify({'success': False, 'message': '无权限，只有管理员可以访问'})
+    
+    data = request.get_json()
+    user_id = data.get('user_id')
+    new_password = data.get('new_password')
+    
+    if not user_id or not new_password:
+        return jsonify({'success': False, 'message': '参数不完整'})
+    
+    if len(new_password) < 4:
+        return jsonify({'success': False, 'message': '密码至少4位'})
+    
+    # 检查用户是否存在
+    user = models.get_user_by_id(user_id)
+    if not user:
+        return jsonify({'success': False, 'message': '用户不存在'})
+    
+    # 更新密码
+    import hashlib
+    new_hash = hashlib.sha256((new_password + user['salt']).encode()).hexdigest()
+    conn = models.get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET password = ? WHERE id = ?', (new_hash, user_id))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': '密码重置成功'})
+
+
+# ============================================================================
 # 启动入口
 # ============================================================================
 

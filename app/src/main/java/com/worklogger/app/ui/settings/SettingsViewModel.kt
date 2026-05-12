@@ -308,21 +308,98 @@ class SettingsViewModel(
         viewModelScope.launch {
             val state = _uiState.value
             val serverUrl = state.cloudServerUrlInput
+            val username = state.cloudUsernameInput
+            val password = state.cloudPasswordInput
             
             if (serverUrl.isBlank()) {
                 _uiState.update { it.copy(syncResult = "请输入服务器地址") }
                 return@launch
             }
             
+            if (username.isBlank() || password.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请输入用户名和密码") }
+                return@launch
+            }
+            
             _uiState.update { it.copy(syncResult = "正在测试连接...") }
             
-            val result = cloudSyncService.testConnection(serverUrl)
+            // 测试连接
+            val connectionResult = cloudSyncService.testConnection(serverUrl)
             
-            _uiState.update { 
-                it.copy(
-                    syncResult = if (result.getOrDefault(false)) "连接成功！" else "连接失败，请检查服务器地址"
-                ) 
+            if (!connectionResult.getOrDefault(false)) {
+                _uiState.update { it.copy(syncResult = "连接失败，请检查服务器地址") }
+                return@launch
             }
+            
+            _uiState.update { it.copy(syncResult = "正在验证登录...") }
+            
+            // 测试登录
+            val loginResult = cloudSyncService.login(serverUrl, username, password)
+            
+            if (loginResult.getOrDefault(false)) {
+                // 保存登录状态
+                settingsRepository.updateCloudLoggedIn(true)
+                settingsRepository.updateCloudLoginTime(System.currentTimeMillis())
+                _uiState.update { 
+                    it.copy(syncResult = "连接成功！已登录为 \$username") 
+                }
+            } else {
+                settingsRepository.updateCloudLoggedIn(false)
+                _uiState.update { 
+                    it.copy(syncResult = "登录失败，请检查用户名和密码") 
+                }
+            }
+        }
+    }
+    
+    /**
+     * 登录到云端
+     */
+    fun loginToCloud() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val serverUrl = state.settings.cloudServerUrl
+            val username = state.settings.cloudUsername
+            val password = state.settings.cloudPassword
+            
+            if (serverUrl.isBlank() || username.isBlank() || password.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请先配置云同步参数") }
+                return@launch
+            }
+            
+            _uiState.update { it.copy(syncResult = "正在登录...") }
+            
+            // 测试连接
+            val connectionResult = cloudSyncService.testConnection(serverUrl)
+            
+            if (!connectionResult.getOrDefault(false)) {
+                _uiState.update { it.copy(syncResult = "连接失败，请检查服务器地址") }
+                return@launch
+            }
+            
+            // 测试登录
+            val loginResult = cloudSyncService.login(serverUrl, username, password)
+            
+            if (loginResult.getOrDefault(false)) {
+                // 保存登录状态
+                settingsRepository.updateCloudLoggedIn(true)
+                settingsRepository.updateCloudLoginTime(System.currentTimeMillis())
+                _uiState.update { it.copy(syncResult = "登录成功！") }
+            } else {
+                settingsRepository.updateCloudLoggedIn(false)
+                _uiState.update { it.copy(syncResult = "登录失败，请检查用户名和密码") }
+            }
+        }
+    }
+    
+    /**
+     * 登出云端
+     */
+    fun logoutFromCloud() {
+        viewModelScope.launch {
+            settingsRepository.updateCloudLoggedIn(false)
+            settingsRepository.updateCloudLoginTime(0L)
+            _uiState.update { it.copy(syncResult = "已登出云端") }
         }
     }
     
