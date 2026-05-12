@@ -32,7 +32,15 @@ data class HomeUiState(
     val warningHours: Double = 0.0,
     val showDuplicateWarning: Boolean = false,
     val duplicateDate: String = "",
-    val showQuickCheckInDialog: Boolean = false  // 一键记工需要输入工地名称
+    val showQuickCheckInDialog: Boolean = false,  // 一键记工需要输入工地名称
+    // 待保存的记录参数（用于警告对话框确认后继续保存）
+    val pendingSaveDate: String = "",
+    val pendingSaveHours: Double = 0.0,
+    val pendingSaveIsOvertime: Boolean = false,
+    val pendingSaveLocation: String = "",
+    val pendingSaveRemark: String = "",
+    val pendingSaveMealSubsidy: Boolean = false,
+    val pendingSaveIsManual: Boolean = false
 )
 
 class HomeViewModel(
@@ -72,7 +80,7 @@ class HomeViewModel(
     private suspend fun loadMonthlyData(settings: UserSettings) {
         val currentMonth = _uiState.value.currentMonth
         val startDate = DateUtils.getYearMonthFirstDay(currentMonth)
-        val endDate = DateUtils.getYearMonthLastDay(currentMonth)
+        val endDate = DateUtils.getYearMonthNextFirstDay(currentMonth)
         
         val records = workRepository.getRecordsByDateRange(startDate, endDate)
         val stats = StatsCalculator.calculateStats(
@@ -148,14 +156,38 @@ class HomeViewModel(
         viewModelScope.launch {
             // 检查工时异常
             if (hours > 12 || (hours < 1 && hours > 0)) {
-                _uiState.update { it.copy(showHoursWarning = true, warningHours = hours) }
+                _uiState.update { 
+                    it.copy(
+                        showHoursWarning = true, 
+                        warningHours = hours,
+                        pendingSaveDate = date,
+                        pendingSaveHours = hours,
+                        pendingSaveIsOvertime = isOvertime,
+                        pendingSaveLocation = location,
+                        pendingSaveRemark = remark,
+                        pendingSaveMealSubsidy = mealSubsidy,
+                        pendingSaveIsManual = isManual
+                    ) 
+                }
                 return@launch
             }
             
             // 检查重复
             val existingRecords = workRepository.getRecordsByDate(date)
             if (existingRecords.isNotEmpty() && _uiState.value.editingRecord == null) {
-                _uiState.update { it.copy(showDuplicateWarning = true, duplicateDate = date) }
+                _uiState.update { 
+                    it.copy(
+                        showDuplicateWarning = true, 
+                        duplicateDate = date,
+                        pendingSaveDate = date,
+                        pendingSaveHours = hours,
+                        pendingSaveIsOvertime = isOvertime,
+                        pendingSaveLocation = location,
+                        pendingSaveRemark = remark,
+                        pendingSaveMealSubsidy = mealSubsidy,
+                        pendingSaveIsManual = isManual
+                    ) 
+                }
                 return@launch
             }
             
@@ -163,18 +195,15 @@ class HomeViewModel(
         }
     }
     
-    fun confirmSaveAnyway(
-        date: String,
-        hours: Double,
-        isOvertime: Boolean,
-        location: String,
-        remark: String,
-        mealSubsidy: Boolean,
-        isManual: Boolean
-    ) {
+    fun confirmSaveAnyway() {
+        val state = _uiState.value
         _uiState.update { it.copy(showHoursWarning = false) }
         viewModelScope.launch {
-            performSave(date, hours, isOvertime, location, remark, mealSubsidy, isManual)
+            performSave(
+                state.pendingSaveDate, state.pendingSaveHours, state.pendingSaveIsOvertime,
+                state.pendingSaveLocation, state.pendingSaveRemark, state.pendingSaveMealSubsidy,
+                state.pendingSaveIsManual
+            )
         }
     }
     
@@ -182,18 +211,15 @@ class HomeViewModel(
         _uiState.update { it.copy(showHoursWarning = false) }
     }
     
-    fun confirmDuplicateAnyway(
-        date: String,
-        hours: Double,
-        isOvertime: Boolean,
-        location: String,
-        remark: String,
-        mealSubsidy: Boolean,
-        isManual: Boolean
-    ) {
+    fun confirmDuplicateAnyway() {
+        val state = _uiState.value
         _uiState.update { it.copy(showDuplicateWarning = false) }
         viewModelScope.launch {
-            performSave(date, hours, isOvertime, location, remark, mealSubsidy, isManual)
+            performSave(
+                state.pendingSaveDate, state.pendingSaveHours, state.pendingSaveIsOvertime,
+                state.pendingSaveLocation, state.pendingSaveRemark, state.pendingSaveMealSubsidy,
+                state.pendingSaveIsManual
+            )
         }
     }
     
@@ -265,6 +291,27 @@ class HomeViewModel(
     
     fun confirmQuickCheckIn(location: String, date: String = DateUtils.today()) {
         viewModelScope.launch {
+            // 检查该日期是否已有记录
+            val existingRecords = workRepository.getRecordsByDate(date)
+            if (existingRecords.isNotEmpty()) {
+                // 保存待确认参数，弹出重复提醒
+                _uiState.update {
+                    it.copy(
+                        showQuickCheckInDialog = false,
+                        showDuplicateWarning = true,
+                        duplicateDate = date,
+                        pendingSaveDate = date,
+                        pendingSaveHours = pendingQuickCheckInHours,
+                        pendingSaveIsOvertime = false,
+                        pendingSaveLocation = location.trim(),
+                        pendingSaveRemark = "",
+                        pendingSaveMealSubsidy = true,
+                        pendingSaveIsManual = false
+                    )
+                }
+                return@launch
+            }
+            
             // 一键记工：标准工（标准工时），强制饭补=true
             val record = WorkRecord(
                 date = date,
