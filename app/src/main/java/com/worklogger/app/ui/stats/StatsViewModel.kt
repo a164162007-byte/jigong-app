@@ -59,11 +59,11 @@ class StatsViewModel(
         val (startDate, endDate) = when (state.selectedPeriod) {
             "month" -> {
                 val ym = state.selectedYearMonth
-                Pair(DateUtils.getYearMonthFirstDay(ym), DateUtils.getYearMonthLastDay(ym))
+                Pair(DateUtils.getYearMonthFirstDay(ym), DateUtils.getYearMonthNextFirstDay(ym))
             }
             "year" -> {
                 val year = DateUtils.getYear(state.selectedYearMonth)
-                Pair("$year-01-01", "$year-12-31")
+                Pair("$year-01-01", "${year + 1}-01-01")
             }
             else -> {
                 val ym = state.selectedYearMonth
@@ -90,12 +90,9 @@ class StatsViewModel(
         // 计算上月数据用于对比
         val prevYearMonth = DateUtils.addMonths(state.selectedYearMonth, -1)
         val prevStartDate = DateUtils.getYearMonthFirstDay(prevYearMonth)
-        val prevEndDate = DateUtils.getYearMonthLastDay(prevYearMonth)
+        val prevEndDate = DateUtils.getYearMonthNextFirstDay(prevYearMonth)
         
-        val allRecords = workRepository.getAllRecordsOnce()
-        val prevRecords = allRecords.filter { 
-            it.date >= prevStartDate && it.date <= prevEndDate 
-        }
+        val prevRecords = workRepository.getRecordsByDateRange(prevStartDate, prevEndDate)
         val prevStats = StatsCalculator.calculateStats(
             prevRecords,
             settings.dailyWorkHours,
@@ -142,11 +139,9 @@ class StatsViewModel(
         
         for (ym in yearMonths) {
             val startDate = DateUtils.getYearMonthFirstDay(ym)
-            val endDate = DateUtils.getYearMonthLastDay(ym)
+            val endDate = DateUtils.getYearMonthNextFirstDay(ym)
             
-            val records = workRepository.getAllRecordsOnce().filter {
-                it.date >= startDate && it.date <= endDate
-            }
+            val records = workRepository.getRecordsByDateRange(startDate, endDate)
             
             val stats = StatsCalculator.calculateStats(
                 records,
