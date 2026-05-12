@@ -343,8 +343,10 @@ fun StatsScreen(
                 
                 // 本月记工明细折叠栏
                 item {
-                    MonthlyDetailCard(
-                        records = uiState.monthlyDetailRecords
+                    MonthlyDetailCardWithActions(
+                        records = uiState.monthlyDetailRecords,
+                        onEdit = { record -> viewModel.showEditDialog(record) },
+                        onDelete = { record -> viewModel.showDeleteConfirm(record) }
                     )
                 }
                 
@@ -352,6 +354,30 @@ fun StatsScreen(
                     Spacer(modifier = Modifier.height(80.dp))
                 }
             }
+        }
+        
+        // 编辑记录对话框
+        if (uiState.showEditDialog && uiState.editingRecord != null) {
+            AddRecordDialog(
+                record = uiState.editingRecord,
+                recentLocations = emptyList(),
+                onDismiss = { viewModel.hideEditDialog() },
+                onSave = { date, hours, isOvertime, location, remark, mealSubsidy, isManual ->
+                    viewModel.saveEditedRecord(date, hours, isOvertime, location, remark, mealSubsidy, isManual)
+                }
+            )
+        }
+        
+        // 删除确认对话框
+        if (uiState.showDeleteConfirm && uiState.deletingRecord != null) {
+            ConfirmDialog(
+                title = "确认删除",
+                message = "确定要删除 ${uiState.deletingRecord!!.date} 的记录吗？删除后可从回收站恢复。",
+                confirmText = "删除",
+                onConfirm = { viewModel.confirmDelete() },
+                onDismiss = { viewModel.hideDeleteConfirm() },
+                isDangerous = true
+            )
         }
     }
 }

@@ -235,7 +235,7 @@ fun AddRecordDialog(
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                val mealSubsidyEnabled = !isOvertime
+                val mealSubsidyEnabled = !isOvertime && isManual
                 val mealSubsidyText = when {
                     !isOvertime && !isManual -> "饭补（标准工必含）"
                     isOvertime -> "饭补（加班无饭补）"
