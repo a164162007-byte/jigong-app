@@ -34,7 +34,7 @@ class CalendarViewModel(
         val state = _uiState.value
         val yearMonth = String.format("%04d-%02d", state.currentYear, state.currentMonth)
         val startDate = DateUtils.getYearMonthFirstDay(yearMonth)
-        val endDate = DateUtils.getYearMonthLastDay(yearMonth)
+        val endDate = DateUtils.getYearMonthNextFirstDay(yearMonth)
         
         viewModelScope.launch {
             val records = workRepository.getRecordsByDateRange(startDate, endDate)
