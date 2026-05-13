@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}统计 - 记工App{% endblock %}
+
+{% block extra_style %}
+<style>
+    .stats-header { background: linear-gradient(135deg, #2196F3, #1976D2); color: white; padding: 20px; border-radius: 12px; margin-bottom: 16px; }
+    .period-selector { display: flex; gap: 8px; margin-bottom: 16px; }
+    .period-btn { padding: 8px 16px; border-radius: 20px; border: none; background: rgba(255,255,255,0.2); color: white; cursor: pointer; font-size: 14px; }
+    .period-btn.active { background: white; color: #2196F3; }
+    
+    .summary-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+    .summary-card { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .summary-value { font-size: 24px; font-weight: bold; color: #2196F3; }
+    .summary-label { font-size: 12px; color: #666; margin-top: 4px; }
+    
+    .detail-list { background: white; border-radius: 8px; overflow: hidden; }
+    .detail-item { display: flex; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #f0f0f0; }
+    .detail-item:last-child { border-bottom: none; }
+    .detail-label { color: #666; }
+    .detail-value { font-weight: 500; }
+    .detail-value.highlight { color: #2196F3; }
+    
+    .location-chart { margin-top: 16px; }
+    .location-item { margin-bottom: 12px; }
+    .location-name { font-size: 14px; margin-bottom: 6px; }
+    .location-bar { background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden; }
+    .location-fill { background: #2196F3; height: 100%; border-radius: 4px; transition: width 0.3s; }
+    .location-count { font-size: 12px; color: #666; margin-top: 2px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 统计概览 -->
+<div class="stats-header">
+    <div class="period-selector">
+        <button class="period-btn active" onclick="setPeriod('month')">本月</button>
+        <button class="period-btn" onclick="setPeriod('year')">本年</button>
+        <button class="period-btn" onclick="setPeriod('custom')">自定义</button>
+    </div>
+    <div id="periodInfo" style="font-size: 14px; opacity: 0.9;"></div>
+</div>
+
+<!-- 汇总卡片 -->
+<div class="summary-cards">
+    <div class="summary-card">
+        <div class="summary-value" id="standardDays">0</div>
+        <div class="summary-label">标准工天数</div>
+    </div>
+    <div class="summary-card">
+        <div class="summary-value" id="overtimeHours">0</div>
+        <div class="summary-label">加班小时</div>
+    </div>
+    <div class="summary-card">
+        <div class="summary-value" id="totalHours">0</div>
+        <div class="summary-label">总工时</div>
+    </div>
+    <div class="summary-card">
+        <div class="summary-value" id="mealSubsidy">0</div>
+        <div class="summary-label">饭补次数</div>
+    </div>
+</div>
+
+<!-- 工资统计 -->
+<div class="card">
+    <div class="card-title">工资计算</div>
+    <div class="detail-list">
+        <div class="detail-item">
+            <span class="detail-label">日工资标准</span>
+            <span class="detail-value" id="dailyWage">¥0</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">标准工工资</span>
+            <span class="detail-value highlight" id="standardWage">¥0</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">加班工资</span>
+            <span class="detail-value" id="overtimeWage">¥0</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">饭补合计</span>
+            <span class="detail-value" id="mealSubsidyTotal">¥0</span>
+        </div>
+        <div class="detail-item" style="background: #f9f9f9;">
+            <span class="detail-label" style="font-weight: 500;">应发工资</span>
+            <span class="detail-value highlight" id="totalWage" style="font-size: 18px;">¥0</span>
+        </div>
+    </div>
+</div>
+
+<!-- 地点分布 -->
+<div class="card location-chart">
+    <div class="card-title">工作地点分布</div>
+    <div id="locationList"></div>
+</div>
+
+<!-- 自定义日期选择 -->
+<div class="card" id="customRange" style="display: none;">
+    <div class="card-title">选择日期范围</div>
+    <div class="form-group">
+        <label class="form-label">开始日期</label>
+        <input type="date" class="form-input" id="startDate">
+    </div>
+    <div class="form-group">
+        <label class="form-label">结束日期</label>
+        <input type="date" class="form-input" id="endDate">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="loadCustomStats()">查询</button>
+</div>
+{% endblock %}
+
+{% block js %}
+let currentPeriod = 'month';
+let settings = {};
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadSettings();
+    loadStats();
+});
+
+async function loadSettings() {
+    try {
+        const res = await fetch('/api/settings');
+        const json = await res.json();
+        if (json.success && json.data) {
+            settings = json.data;
+        }
+    } catch (e) {}
+}
+
+async function loadStats() {
+    let url = '/api/statistics';
+    
+    if (currentPeriod === 'month') {
+        const now = new Date();
+        url += `?month=${now.getMonth() + 1}`;
+    } else if (currentPeriod === 'year') {
+        url += `?year=${new Date().getFullYear()}`;
+    }
+    
+    try {
+        const res = await fetch(url);
+        const json = await res.json();
+        
+        if (json.success) {
+            updateUI(json.data);
+        }
+    } catch (e) {
+        console.error('加载统计失败', e);
+    }
+}
+
+async function loadCustomStats() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    
+    if (!startDate || !endDate) {
+        alert('请选择日期范围');
+        return;
+    }
+    
+    try {
+        const res = await fetch(`/api/statistics?start_date=${startDate}&end_date=${endDate}`);
+        const json = await res.json();
+        
+        if (json.success) {
+            updateUI(json.data);
+        }
+    } catch (e) {}
+}
+
+function updateUI(data) {
+    const standardDays = parseFloat(data.standard_days || 0);
+    const overtimeHours = parseFloat(data.overtime_hours || 0);
+    const mealSubsidyCount = parseInt(data.meal_subsidy_count || 0);
+    const totalHours = parseFloat(data.total_hours || 0);
+    
+    document.getElementById('standardDays').textContent = standardDays;
+    document.getElementById('overtimeHours').textContent = overtimeHours.toFixed(1);
+    document.getElementById('totalHours').textContent = totalHours.toFixed(1);
+    document.getElementById('mealSubsidy').textContent = mealSubsidyCount;
+    
+    // 计算工资
+    const dailyWage = parseFloat(settings.daily_wage || 0);
+    const overtimeRate = parseFloat(settings.overtime_rate || 8);
+    const mealSubsidyAmount = parseFloat(settings.meal_subsidy || 15);
+    
+    const standardWage = standardDays * dailyWage;
+    const overtimeWage = overtimeHours * overtimeRate;
+    const mealTotal = mealSubsidyCount * mealSubsidyAmount;
+    const total = standardWage + overtimeWage + mealTotal;
+    
+    document.getElementById('dailyWage').textContent = '¥' + dailyWage;
+    document.getElementById('standardWage').textContent = '¥' + standardWage.toFixed(2);
+    document.getElementById('overtimeWage').textContent = '¥' + overtimeWage.toFixed(2);
+    document.getElementById('mealSubsidyTotal').textContent = '¥' + mealTotal.toFixed(2);
+    document.getElementById('totalWage').textContent = '¥' + total.toFixed(2);
+    
+    // 地点分布
+    const locations = data.location_stats || [];
+    renderLocationChart(locations);
+}
+
+function renderLocationChart(locations) {
+    const container = document.getElementById('locationList');
+    
+    if (locations.length === 0) {
+        container.innerHTML = '<div class="empty-state">暂无数据</div>';
+        return;
+    }
+    
+    const maxCount = Math.max(...locations.map(l => parseInt(l.count || 0)));
+    
+    let html = '';
+    locations.forEach(loc => {
+        const count = parseInt(loc.count || 0);
+        const percentage = maxCount > 0 ? (count / maxCount * 100) : 0;
+        html += `
+            <div class="location-item">
+                <div class="location-name">${loc.location || '未填写'}</div>
+                <div class="location-bar">
+                    <div class="location-fill" style="width: ${percentage}%"></div>
+                </div>
+                <div class="location-count">${count}天 · ${parseFloat(loc.hours || 0).toFixed(1)}小时</div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+function setPeriod(period) {
+    currentPeriod = period;
+    
+    document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    const customRange = document.getElementById('customRange');
+    const periodInfo = document.getElementById('periodInfo');
+    
+    if (period === 'month') {
+        customRange.style.display = 'none';
+        const now = new Date();
+        periodInfo.textContent = `${now.getFullYear()}年${now.getMonth() + 1}月`;
+    } else if (period === 'year') {
+        customRange.style.display = 'none';
+        periodInfo.textContent = `${new Date().getFullYear()}年`;
+    } else {
+        customRange.style.display = 'block';
+        const now = new Date();
+        document.getElementById('startDate').value = now.toISOString().split('T')[0].slice(0, 7) + '-01';
+        document.getElementById('endDate').value = now.toISOString().split('T')[0];
+        periodInfo.textContent = '自定义范围';
+    }
+    
+    loadStats();
+}
+{% endblock %}

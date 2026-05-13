@@ -18,7 +18,7 @@
 版本: 1.19.0
 """
 
-VERSION = 'v2.1.6.0'
+VERSION = 'v2.1.9.7'
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import os
@@ -85,16 +85,37 @@ def login_required(f):
     """
     登录验证装饰器
     
-    用于保护需要登录才能访问的路由
+    支持两种认证方式：
+    1. Session认证：Web端通过Cookie登录
+    2. Basic Auth认证：App端通过Authorization头登录
+    
     验证通过后，当前用户信息会注入到视图函数参数中
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            if request.is_json:
-                return jsonify({'success': False, 'message': '请先登录', 'need_login': True})
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
+        # 先检查session
+        if 'user_id' in session:
+            return f(*args, **kwargs)
+        
+        # 再检查Basic Auth（App端使用）
+        auth = request.authorization
+        if auth and auth.username and auth.password:
+            success, message, user = authenticate_user(auth.username, auth.password)
+            if success:
+                # 将用户信息注入session（不持久化）
+                session['user_id'] = user['id']
+                session['username'] = user['username']
+                return f(*args, **kwargs)
+            else:
+                # Basic Auth认证失败
+                if request.is_json or request.headers.get('Accept') == 'application/json':
+                    return jsonify({'success': False, 'message': '认证失败'}), 401
+                return redirect(url_for('login'))
+        
+        # 都没有认证
+        if request.is_json or request.headers.get('Accept') == 'application/json':
+            return jsonify({'success': False, 'message': '请先登录', 'need_login': True}), 401
+        return redirect(url_for('login'))
     return decorated_function
 
 
@@ -405,6 +426,8 @@ def api_add_record():
     hours = data.get('hours')
     force_add = data.get('force_add', False)
     auto_split_overtime = data.get('auto_split_overtime', False)
+    remark = data.get('remark', '')
+    meal_subsidy = float(data.get('meal_subsidy', 0)) if data.get('meal_subsidy') else 0
     
     if not all([record_type, work_date, location]):
         return jsonify({'success': False, 'message': '缺少必填字段'})
@@ -439,7 +462,9 @@ def api_add_record():
                     end_time=end_time,
                     morning_end_time=morning_end_time,
                     afternoon_start_time=afternoon_start_time,
-                    hours=daily_hours
+                    hours=daily_hours,
+                    remark=remark,
+                    meal_subsidy=meal_subsidy
                 )
                 
                 # 创建加班记录
@@ -452,7 +477,9 @@ def api_add_record():
                     end_time=None,
                     morning_end_time=None,
                     afternoon_start_time=None,
-                    hours=overtime_hours
+                    hours=overtime_hours,
+                    remark='',
+                    meal_subsidy=0
                 )
                 
                 return jsonify({
@@ -471,7 +498,9 @@ def api_add_record():
             end_time=end_time,
             morning_end_time=morning_end_time,
             afternoon_start_time=afternoon_start_time,
-            hours=hours
+            hours=hours,
+            remark=remark,
+            meal_subsidy=meal_subsidy
         )
         return jsonify({'success': True, 'message': '记录添加成功', 'id': record_id})
     except Exception as e:
@@ -521,7 +550,9 @@ def api_update_record(record_id):
             end_time=data.get('end_time'),
             morning_end_time=data.get('morning_end_time'),
             afternoon_start_time=data.get('afternoon_start_time'),
-            hours=data.get('hours')
+            hours=data.get('hours'),
+            remark=data.get('remark', ''),
+            meal_subsidy=float(data.get('meal_subsidy', 0)) if data.get('meal_subsidy') else None
         )
         return jsonify({'success': True, 'message': '记录更新成功'})
     except Exception as e:
@@ -1328,8 +1359,10 @@ def api_import_data():
             
             return jsonify({
                 'success': True,
-                'imported': imported,
-                'duplicates': duplicates,
+                'data': {
+                    'success_count': imported,
+                    'error_count': duplicates
+                },
                 'message': f'成功导入 {imported} 条记录，跳过 {duplicates} 条重复记录'
             })
         

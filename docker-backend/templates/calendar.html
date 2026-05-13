@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}日历 - 记工App{% endblock %}
+
+{% block extra_style %}
+<style>
+    .calendar-header { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: white; border-radius: 8px; margin-bottom: 12px; }
+    .calendar-title { font-size: 18px; font-weight: 500; }
+    .calendar-nav { display: flex; gap: 8px; }
+    .calendar-nav button { background: none; border: 1px solid #ddd; border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+    
+    .calendar-weekday { display: grid; grid-template-columns: repeat(7, 1fr); background: white; border-radius: 8px 8px 0 0; }
+    .weekday-item { text-align: center; padding: 10px; font-size: 12px; color: #999; font-weight: 500; }
+    
+    .calendar-grid { background: white; border-radius: 0 0 8px 8px; display: grid; grid-template-columns: repeat(7, 1fr); }
+    .calendar-day { min-height: 60px; border: 1px solid #f0f0f0; border-top: none; border-left: none; padding: 4px; position: relative; cursor: pointer; }
+    .calendar-day:nth-child(7n) { border-right: none; }
+    .calendar-day.other-month { background: #fafafa; }
+    .calendar-day.today { background: #E3F2FD; }
+    .day-number { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+    .today .day-number { color: #1976D2; }
+    .day-records { display: flex; flex-wrap: wrap; gap: 2px; }
+    .day-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .day-dot.standard { background: #2196F3; }
+    .day-dot.manual { background: #4CAF50; }
+    .day-dot.overtime { background: #FF9800; }
+    
+    .day-detail { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 12px; padding: 20px; width: 90%; max-width: 360px; max-height: 80vh; overflow-y: auto; z-index: 200; display: none; }
+    .day-detail.show { display: block; }
+    .detail-date { font-size: 18px; font-weight: 500; margin-bottom: 16px; text-align: center; }
+    .detail-record { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+    .detail-record:last-child { border-bottom: none; }
+    .detail-type { font-size: 12px; padding: 2px 8px; border-radius: 4px; margin-right: 8px; }
+    .detail-type.standard { background: #E3F2FD; color: #1976D2; }
+    .detail-type.manual { background: #E8F5E9; color: #388E3C; }
+    .detail-type.overtime { background: #FFF3E0; color: #F57C00; }
+    .detail-info { flex: 1; }
+    .detail-hours { font-weight: 500; }
+    .detail-location { font-size: 12px; color: #666; }
+    
+    .overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 199; display: none; }
+    .overlay.show { display: block; }
+    
+    .stats-mini { display: flex; justify-content: space-around; padding: 12px; background: #f9f9f9; border-radius: 8px; margin-bottom: 16px; }
+    .stats-mini-item { text-align: center; }
+    .stats-mini-value { font-size: 18px; font-weight: bold; color: #2196F3; }
+    .stats-mini-label { font-size: 11px; color: #999; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 月份导航 -->
+<div class="calendar-header">
+    <button class="btn btn-outline" onclick="changeMonth(-1)">&lt;</button>
+    <span class="calendar-title" id="currentMonth"></span>
+    <button class="btn btn-outline" onclick="changeMonth(1)">&gt;</button>
+</div>
+
+<!-- 本月统计 -->
+<div class="stats-mini">
+    <div class="stats-mini-item">
+        <div class="stats-mini-value" id="monthDays">0</div>
+        <div class="stats-mini-label">记工天数</div>
+    </div>
+    <div class="stats-mini-item">
+        <div class="stats-mini-value" id="monthHours">0</div>
+        <div class="stats-mini-label">总工时</div>
+    </div>
+    <div class="stats-mini-item">
+        <div class="stats-mini-value" id="monthOvertime">0</div>
+        <div class="stats-mini-label">加班</div>
+    </div>
+</div>
+
+<!-- 星期标题 -->
+<div class="calendar-weekday">
+    <div class="weekday-item">日</div>
+    <div class="weekday-item">一</div>
+    <div class="weekday-item">二</div>
+    <div class="weekday-item">三</div>
+    <div class="weekday-item">四</div>
+    <div class="weekday-item">五</div>
+    <div class="weekday-item">六</div>
+</div>
+
+<!-- 日历网格 -->
+<div class="calendar-grid" id="calendarGrid"></div>
+
+<!-- 日记录详情 -->
+<div class="overlay" id="overlay" onclick="closeDetail()"></div>
+<div class="day-detail" id="dayDetail">
+    <div class="detail-date" id="detailDate"></div>
+    <div id="detailRecords"></div>
+    <button class="btn btn-outline btn-block" onclick="closeDetail()" style="margin-top: 16px;">关闭</button>
+</div>
+{% endblock %}
+
+{% block js %}
+let currentYear, currentMonth;
+let calendarData = {};
+
+document.addEventListener('DOMContentLoaded', function() {
+    const now = new Date();
+    currentYear = now.getFullYear();
+    currentMonth = now.getMonth() + 1;
+    loadCalendar();
+});
+
+async function loadCalendar() {
+    try {
+        const res = await fetch(`/api/calendar?year=${currentYear}&month=${currentMonth}`);
+        const json = await res.json();
+        
+        if (json.success) {
+            calendarData = json.data || {};
+            updateMonthStats();
+            renderCalendar();
+        }
+    } catch (e) {
+        console.error('加载日历失败', e);
+    }
+}
+
+function updateMonthStats() {
+    let days = 0, hours = 0, overtime = 0;
+    
+    Object.values(calendarData).forEach(records => {
+        records.forEach(record => {
+            if (record.record_type !== 'overtime') {
+                days++;
+            } else {
+                overtime += parseFloat(record.hours || 0);
+            }
+            hours += parseFloat(record.hours || 0);
+        });
+    });
+    
+    document.getElementById('monthDays').textContent = days;
+    document.getElementById('monthHours').textContent = hours.toFixed(1);
+    document.getElementById('monthOvertime').textContent = overtime.toFixed(1);
+}
+
+function renderCalendar() {
+    const title = document.getElementById('currentMonth');
+    title.textContent = `${currentYear}年${currentMonth}月`;
+    
+    const grid = document.getElementById('calendarGrid');
+    grid.innerHTML = '';
+    
+    const firstDay = new Date(currentYear, currentMonth - 1, 1);
+    const lastDay = new Date(currentYear, currentMonth, 0);
+    const startWeekday = firstDay.getDay();
+    const daysInMonth = lastDay.getDate();
+    
+    const today = new Date();
+    const isCurrentMonth = today.getFullYear() === currentYear && today.getMonth() + 1 === currentMonth;
+    const todayDate = today.getDate();
+    
+    // 上月空白
+    for (let i = 0; i < startWeekday; i++) {
+        const day = document.createElement('div');
+        day.className = 'calendar-day other-month';
+        grid.appendChild(day);
+    }
+    
+    // 当月日期
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const records = calendarData[dateStr] || [];
+        
+        const dayEl = document.createElement('div');
+        dayEl.className = 'calendar-day';
+        if (isCurrentMonth && day === todayDate) {
+            dayEl.classList.add('today');
+        }
+        
+        let dotsHtml = '';
+        const types = new Set();
+        records.forEach(r => types.add(r.record_type));
+        types.forEach(type => {
+            dotsHtml += `<span class="day-dot ${type}"></span>`;
+        });
+        
+        dayEl.innerHTML = `
+            <div class="day-number">${day}</div>
+            <div class="day-records">${dotsHtml}</div>
+        `;
+        
+        if (records.length > 0) {
+            dayEl.onclick = () => showDayDetail(dateStr, records);
+        }
+        
+        grid.appendChild(dayEl);
+    }
+    
+    // 下月空白
+    const totalCells = startWeekday + daysInMonth;
+    const remaining = 42 - totalCells;
+    for (let i = 0; i < remaining; i++) {
+        const day = document.createElement('div');
+        day.className = 'calendar-day other-month';
+        grid.appendChild(day);
+    }
+}
+
+function showDayDetail(dateStr, records) {
+    document.getElementById('detailDate').textContent = dateStr;
+    
+    let html = '';
+    records.forEach(record => {
+        const typeLabel = { standard: '标准工', manual: '手动', overtime: '加班' };
+        html += `
+            <div class="detail-record">
+                <span class="detail-type ${record.record_type}">${typeLabel[record.record_type] || '记工'}</span>
+                <div class="detail-info">
+                    <div class="detail-hours">${record.hours}小时</div>
+                    <div class="detail-location">${record.location || '未填写'}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    document.getElementById('detailRecords').innerHTML = html;
+    document.getElementById('overlay').classList.add('show');
+    document.getElementById('dayDetail').classList.add('show');
+}
+
+function closeDetail() {
+    document.getElementById('overlay').classList.remove('show');
+    document.getElementById('dayDetail').classList.remove('show');
+}
+
+function changeMonth(delta) {
+    currentMonth += delta;
+    if (currentMonth > 12) {
+        currentMonth = 1;
+        currentYear++;
+    } else if (currentMonth < 1) {
+        currentMonth = 12;
+        currentYear--;
+    }
+    loadCalendar();
+}
+{% endblock %}

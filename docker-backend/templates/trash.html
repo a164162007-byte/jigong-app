@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}回收站 - 记工App{% endblock %}
+
+{% block extra_style %}
+<style>
+    .trash-info { background: #FFF3E0; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; color: #E65100; }
+    .trash-empty { text-align: center; padding: 40px 20px; color: #999; }
+    .trash-empty svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.5; }
+    
+    .trash-item { display: flex; align-items: center; padding: 14px 0; border-bottom: 1px solid #f0f0f0; }
+    .trash-item:last-child { border-bottom: none; }
+    .trash-date { font-size: 16px; font-weight: 500; min-width: 80px; }
+    .trash-type { font-size: 12px; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+    .trash-type.standard { background: #E3F2FD; color: #1976D2; }
+    .trash-type.manual { background: #E8F5E9; color: #388E3C; }
+    .trash-type.overtime { background: #FFF3E0; color: #F57C00; }
+    .trash-info-col { flex: 1; margin-left: 12px; }
+    .trash-location { font-size: 14px; color: #333; }
+    .trash-hours { font-size: 14px; color: #666; margin-top: 2px; }
+    .trash-actions { display: flex; gap: 8px; }
+    .trash-actions .btn { padding: 6px 12px; font-size: 12px; }
+    
+    .deleted-time { font-size: 11px; color: #999; margin-top: 2px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 提示信息 -->
+<div class="trash-info">
+    回收站中的记录会在30天后自动删除
+</div>
+
+<!-- 操作按钮 -->
+<div style="display: flex; gap: 8px; margin-bottom: 16px;">
+    <button class="btn btn-outline" onclick="loadTrash()" style="flex: 1;">刷新</button>
+    <button class="btn btn-danger" onclick="emptyTrash()" style="flex: 1;">清空回收站</button>
+</div>
+
+<!-- 记录列表 -->
+<div class="card" id="trashList">
+    <div class="loading">加载中...</div>
+</div>
+{% endblock %}
+
+{% block js %}
+document.addEventListener('DOMContentLoaded', function() {
+    loadTrash();
+});
+
+async function loadTrash() {
+    const list = document.getElementById('trashList');
+    
+    try {
+        const res = await fetch('/api/trash');
+        const json = await res.json();
+        
+        if (!json.success) {
+            list.innerHTML = '<div class="trash-empty">加载失败</div>';
+            return;
+        }
+        
+        const records = json.data || [];
+        
+        if (records.length === 0) {
+            list.innerHTML = `
+                <div class="trash-empty">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    <p>回收站是空的</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        records.forEach(record => {
+            const typeLabel = { standard: '标准工', manual: '手动', overtime: '加班' };
+            const deletedAt = record.deleted_at ? new Date(record.deleted_at).toLocaleDateString() : '未知';
+            
+            html += `
+                <div class="trash-item">
+                    <div class="trash-date">${record.work_date.slice(5)}</div>
+                    <span class="trash-type ${record.record_type}">${typeLabel[record.record_type] || '记工'}</span>
+                    <div class="trash-info-col">
+                        <div class="trash-location">${record.location || '未填写'}</div>
+                        <div class="trash-hours">${record.hours}小时</div>
+                        <div class="deleted-time">删除于 ${deletedAt}</div>
+                    </div>
+                    <div class="trash-actions">
+                        <button class="btn btn-success" onclick="restoreRecord(${record.id})">恢复</button>
+                        <button class="btn btn-danger" onclick="permanentDelete(${record.id})">删除</button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        list.innerHTML = html;
+    } catch (e) {
+        list.innerHTML = '<div class="trash-empty">加载失败</div>';
+    }
+}
+
+// 恢复记录
+async function restoreRecord(id) {
+    if (!confirm('确定要恢复这条记录吗？')) return;
+    
+    try {
+        const res = await fetch(`/api/trash/${id}/restore`, {
+            method: 'POST'
+        });
+        
+        const json = await res.json();
+        
+        if (json.success) {
+            loadTrash();
+        } else {
+            alert(json.message || '恢复失败');
+        }
+    } catch (e) {
+        alert('网络错误');
+    }
+}
+
+// 永久删除
+async function permanentDelete(id) {
+    if (!confirm('确定要永久删除吗？此操作不可恢复！')) return;
+    if (!confirm('再次确认：数据将永久丢失！')) return;
+    
+    try {
+        const res = await fetch(`/api/trash/${id}/permanent`, {
+            method: 'DELETE'
+        });
+        
+        const json = await res.json();
+        
+        if (json.success) {
+            loadTrash();
+        } else {
+            alert(json.message || '删除失败');
+        }
+    } catch (e) {
+        alert('网络错误');
+    }
+}
+
+// 清空回收站
+async function emptyTrash() {
+    if (!confirm('确定要清空回收站吗？所有记录将永久删除！')) return;
+    if (!confirm('再次确认：数据将永久丢失！')) return;
+    
+    try {
+        const res = await fetch('/api/trash/empty', {
+            method: 'DELETE'
+        });
+        
+        const json = await res.json();
+        
+        if (json.success) {
+            loadTrash();
+        } else {
+            alert(json.message || '操作失败');
+        }
+    } catch (e) {
+        alert('网络错误');
+    }
+}
+{% endblock %}

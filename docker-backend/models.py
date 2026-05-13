@@ -210,6 +210,18 @@ def init_db():
     except:
         pass  # 字段已存在
     
+    # 添加备注字段（v2.1.9.7）
+    try:
+        cursor.execute('ALTER TABLE work_records ADD COLUMN remark TEXT DEFAULT ""')
+    except:
+        pass  # 字段已存在
+    
+    # 添加饭补字段（v2.1.9.7）
+    try:
+        cursor.execute('ALTER TABLE work_records ADD COLUMN meal_subsidy REAL DEFAULT 0')
+    except:
+        pass  # 字段已存在
+    
     # 创建设置表（添加user_id）
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS settings (
@@ -462,7 +474,7 @@ def update_settings(user_id, settings_dict):
 # ============================================================================
 
 def add_work_record(user_id, record_type, work_date, location, start_time=None, end_time=None, 
-                    morning_end_time=None, afternoon_start_time=None, hours=None):
+                    morning_end_time=None, afternoon_start_time=None, hours=None, remark='', meal_subsidy=0):
     """
     添加记工记录
     
@@ -476,6 +488,8 @@ def add_work_record(user_id, record_type, work_date, location, start_time=None, 
         morning_end_time: 上午下班时间 (HH:MM)
         afternoon_start_time: 下午上班时间 (HH:MM)
         hours: 工作时长（小时）
+        remark: 备注（v2.1.9.7新增）
+        meal_subsidy: 饭补金额（v2.1.9.7新增）
     
     返回:
         int: 新记录的ID
@@ -484,10 +498,10 @@ def add_work_record(user_id, record_type, work_date, location, start_time=None, 
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO work_records (user_id, record_type, work_date, location, start_time, end_time, 
-                                  morning_end_time, afternoon_start_time, hours)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                  morning_end_time, afternoon_start_time, hours, remark, meal_subsidy)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (user_id, record_type, work_date, location, start_time, end_time, 
-          morning_end_time, afternoon_start_time, hours))
+          morning_end_time, afternoon_start_time, hours, remark, meal_subsidy))
     record_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -495,7 +509,7 @@ def add_work_record(user_id, record_type, work_date, location, start_time=None, 
 
 
 def update_work_record(user_id, record_id, record_type, work_date, location, start_time=None, end_time=None,
-                       morning_end_time=None, afternoon_start_time=None, hours=None):
+                       morning_end_time=None, afternoon_start_time=None, hours=None, remark='', meal_subsidy=None):
     """
     更新记工记录
     
@@ -503,16 +517,25 @@ def update_work_record(user_id, record_id, record_type, work_date, location, sta
         user_id: 用户ID（用于权限验证）
         record_id: 记录ID
         其他参数同 add_work_record
+        remark: 备注（v2.1.9.7新增）
+        meal_subsidy: 饭补金额（v2.1.9.7新增）
     """
     conn = get_db()
     cursor = conn.cursor()
+    
+    # 如果meal_subsidy未提供，保留原值
+    if meal_subsidy is None:
+        cursor.execute('SELECT meal_subsidy FROM work_records WHERE id=? AND user_id=?', (record_id, user_id))
+        row = cursor.fetchone()
+        meal_subsidy = row['meal_subsidy'] if row else 0
+    
     cursor.execute('''
         UPDATE work_records 
         SET record_type=?, work_date=?, location=?, start_time=?, end_time=?, 
-            morning_end_time=?, afternoon_start_time=?, hours=?, updated_at=CURRENT_TIMESTAMP
+            morning_end_time=?, afternoon_start_time=?, hours=?, remark=?, meal_subsidy=?, updated_at=CURRENT_TIMESTAMP
         WHERE id=? AND user_id=?
     ''', (record_type, work_date, location, start_time, end_time, 
-          morning_end_time, afternoon_start_time, hours, record_id, user_id))
+          morning_end_time, afternoon_start_time, hours, remark, meal_subsidy, record_id, user_id))
     conn.commit()
     conn.close()
 

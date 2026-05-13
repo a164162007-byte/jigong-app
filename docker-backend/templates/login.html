@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}登录 - 记工App{% endblock %}
+
+{% block extra_style %}
+<style>
+    .login-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .login-box { background: white; border-radius: 12px; padding: 32px; width: 100%; max-width: 360px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .login-logo { text-align: center; margin-bottom: 24px; }
+    .login-logo h1 { font-size: 24px; color: #2196F3; }
+    .login-logo p { font-size: 14px; color: #999; margin-top: 4px; }
+    .form-error { background: #FFEBEE; color: #C62828; padding: 10px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; text-align: center; }
+    .form-link { text-align: center; margin-top: 16px; font-size: 14px; color: #666; }
+    .form-link a { color: #2196F3; text-decoration: none; }
+    .toggle-link { color: #2196F3; cursor: pointer; }
+    .hidden { display: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-box">
+        <div class="login-logo">
+            <h1>记工App</h1>
+            <p>记录每一天的工作</p>
+        </div>
+        
+        {% if error %}
+        <div class="form-error">{{ error }}</div>
+        {% endif %}
+        
+        <!-- 登录表单 -->
+        <form id="loginForm" method="POST" action="/login">
+            <div class="form-group">
+                <label class="form-label">用户名</label>
+                <input type="text" name="username" class="form-input" placeholder="请输入用户名" required value="{{ username or '' }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">密码</label>
+                <input type="password" name="password" class="form-input" placeholder="请输入密码" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">登录</button>
+            <p class="form-link">
+                还没有账号？<span class="toggle-link" onclick="toggleForm('register')">立即注册</span>
+            </p>
+        </form>
+        
+        <!-- 注册表单 -->
+        <form id="registerForm" method="POST" action="/register" class="hidden">
+            <div class="form-group">
+                <label class="form-label">用户名</label>
+                <input type="text" name="username" class="form-input" placeholder="2-20个字符" required value="{{ username or '' }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">密码</label>
+                <input type="password" name="password" class="form-input" placeholder="至少4个字符" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">确认密码</label>
+                <input type="password" name="confirm_password" class="form-input" placeholder="再次输入密码" required>
+            </div>
+            <button type="submit" class="btn btn-success btn-block">注册</button>
+            <p class="form-link">
+                已有账号？<span class="toggle-link" onclick="toggleForm('login')">立即登录</span>
+            </p>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+function toggleForm(form) {
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    
+    if (form === 'register') {
+        loginForm.classList.add('hidden');
+        registerForm.classList.remove('hidden');
+    } else {
+        loginForm.classList.remove('hidden');
+        registerForm.classList.add('hidden');
+    }
+}
+
+// 如果有错误，根据show_register显示对应表单
+{% if show_register %}
+toggleForm('register');
+{% endif %}
+{% endblock %}

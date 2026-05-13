@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2196F3">
+    <title>{% block title %}记工App{% endblock %}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        
+        /* 导航栏 */
+        .navbar { background: #2196F3; color: white; padding: 0; position: sticky; top: 0; z-index: 100; }
+        .navbar-inner { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; max-width: 800px; margin: 0 auto; }
+        .navbar-brand { font-size: 18px; font-weight: bold; }
+        .navbar-user { font-size: 14px; opacity: 0.9; }
+        
+        /* 底部导航 */
+        .bottom-nav { background: white; position: fixed; bottom: 0; left: 0; right: 0; display: flex; border-top: 1px solid #e0e0e0; z-index: 100; }
+        .nav-item { flex: 1; text-align: center; padding: 8px 4px; color: #666; text-decoration: none; font-size: 11px; }
+        .nav-item.active { color: #2196F3; }
+        .nav-item svg { width: 24px; height: 24px; margin-bottom: 2px; }
+        
+        /* 内容区域 */
+        .container { max-width: 800px; margin: 0 auto; padding: 16px; padding-bottom: 80px; }
+        
+        /* 卡片 */
+        .card { background: white; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card-title { font-size: 14px; color: #666; margin-bottom: 12px; }
+        
+        /* 按钮 */
+        .btn { display: inline-block; padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; text-align: center; text-decoration: none; }
+        .btn-primary { background: #2196F3; color: white; }
+        .btn-success { background: #4CAF50; color: white; }
+        .btn-danger { background: #f44336; color: white; }
+        .btn-warning { background: #FF9800; color: white; }
+        .btn-outline { background: transparent; border: 1px solid #ddd; color: #666; }
+        .btn-block { display: block; width: 100%; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        /* 表单 */
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 14px; color: #666; margin-bottom: 6px; }
+        .form-input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+        .form-input:focus { outline: none; border-color: #2196F3; }
+        
+        /* 输入组 */
+        .input-group { display: flex; gap: 8px; }
+        .input-group .form-input { flex: 1; }
+        
+        /* 记录列表 */
+        .record-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+        .record-item:last-child { border-bottom: none; }
+        .record-date { font-size: 16px; font-weight: 500; min-width: 80px; }
+        .record-type { font-size: 12px; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+        .record-type.standard { background: #E3F2FD; color: #1976D2; }
+        .record-type.overtime { background: #FFF3E0; color: #F57C00; }
+        .record-type.manual { background: #E8F5E9; color: #388E3C; }
+        .record-info { flex: 1; margin-left: 12px; }
+        .record-location { font-size: 14px; color: #333; }
+        .record-hours { font-size: 14px; color: #666; margin-top: 2px; }
+        .record-actions { display: flex; gap: 8px; }
+        
+        /* 统计卡片 */
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .stats-card { background: white; border-radius: 8px; padding: 16px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .stats-value { font-size: 24px; font-weight: bold; color: #2196F3; }
+        .stats-label { font-size: 12px; color: #666; margin-top: 4px; }
+        
+        /* 消息提示 */
+        .alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
+        .alert-success { background: #E8F5E9; color: #2E7D32; }
+        .alert-error { background: #FFEBEE; color: #C62828; }
+        .alert-warning { background: #FFF3E0; color: #EF6C00; }
+        
+        /* 空状态 */
+        .empty-state { text-align: center; padding: 40px 20px; color: #999; }
+        .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.5; }
+        
+        /* 切换标签 */
+        .tabs { display: flex; background: white; border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+        .tab { flex: 1; padding: 12px; text-align: center; color: #666; cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab.active { color: #2196F3; border-bottom-color: #2196F3; }
+        
+        /* 加载状态 */
+        .loading { text-align: center; padding: 40px; color: #999; }
+        
+        /* 响应式 */
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+    {% block extra_style %}{% endblock %}
+</head>
+<body>
+    {% if user %}
+    <!-- 顶部导航 -->
+    <nav class="navbar">
+        <div class="navbar-inner">
+            <span class="navbar-brand">记工App</span>
+            <span class="navbar-user">{{ user.username }}</span>
+        </div>
+    </nav>
+    {% endif %}
+    
+    <!-- 主内容 -->
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <!-- 底部导航 -->
+    {% if user %}
+    <nav class="bottom-nav">
+        <a href="/" class="nav-item {% if active == 'index' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+            记工
+        </a>
+        <a href="/stats" class="nav-item {% if active == 'stats' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+            统计
+        </a>
+        <a href="/calendar" class="nav-item {% if active == 'calendar' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>
+            日历
+        </a>
+        <a href="/settings" class="nav-item {% if active == 'settings' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            设置
+        </a>
+        <a href="/system" class="nav-item {% if active == 'system' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            系统
+        </a>
+    </nav>
+    {% endif %}
+    
+    {% block extra_script %}{% endblock %}
+    <script>
+        {% block js %}{% endblock %}
+    </script>
+</body>
+</html>

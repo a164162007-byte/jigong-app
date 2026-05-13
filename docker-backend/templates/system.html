@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+
+{% block title %}系统 - 记工App{% endblock %}
+
+{% block extra_style %}
+<style>
+    .system-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+    .system-item:last-child { border-bottom: none; }
+    .system-item:active { background: #f9f9f9; }
+    .system-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-right: 12px; }
+    .system-icon.blue { background: #E3F2FD; color: #1976D2; }
+    .system-icon.green { background: #E8F5E9; color: #388E3C; }
+    .system-icon.orange { background: #FFF3E0; color: #F57C00; }
+    .system-icon.red { background: #FFEBEE; color: #F44336; }
+    .system-info { display: flex; align-items: center; flex: 1; }
+    .system-label { font-size: 14px; color: #333; }
+    .system-desc { font-size: 12px; color: #999; margin-top: 2px; }
+    .system-arrow { color: #ccc; font-size: 20px; }
+    
+    .admin-section { background: #fff3e0; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
+    .admin-title { font-size: 12px; color: #F57C00; font-weight: 500; margin-bottom: 8px; }
+    
+    .version-info { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 用户管理（仅admin可见） -->
+{% if user.username == 'admin' %}
+<div class="admin-section">
+    <div class="admin-title">管理员功能</div>
+    <div class="system-item" onclick="showUserManagement()">
+        <div class="system-info">
+            <div class="system-icon blue">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+            </div>
+            <div>
+                <div class="system-label">用户管理</div>
+                <div class="system-desc">查看和管理所有用户</div>
+            </div>
+        </div>
+        <span class="system-arrow">&gt;</span>
+    </div>
+</div>
+{% endif %}
+
+<!-- 账户安全 -->
+<div class="card">
+    <div class="card-title">账户安全</div>
+    <div class="system-item" onclick="showChangePassword()">
+        <div class="system-info">
+            <div class="system-icon blue">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM8.9 6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2H8.9V6zM18 20H6V10h12v10z"/></svg>
+            </div>
+            <div>
+                <div class="system-label">修改密码</div>
+                <div class="system-desc">更改登录密码</div>
+            </div>
+        </div>
+        <span class="system-arrow">&gt;</span>
+    </div>
+</div>
+
+<!-- 数据管理 -->
+<div class="card">
+    <div class="card-title">数据管理</div>
+    <div class="system-item" onclick="exportData('json')">
+        <div class="system-info">
+            <div class="system-icon green">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            </div>
+            <div>
+                <div class="system-label">导出JSON</div>
+                <div class="system-desc">备份所有记工数据</div>
+            </div>
+        </div>
+        <span class="system-arrow">&gt;</span>
+    </div>
+    <div class="system-item" onclick="exportData('excel')">
+        <div class="system-info">
+            <div class="system-icon green">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            </div>
+            <div>
+                <div class="system-label">导出Excel</div>
+                <div class="system-desc">导出为Excel表格</div>
+            </div>
+        </div>
+        <span class="system-arrow">&gt;</span>
+    </div>
+    <div class="system-item" onclick="showTrash()">
+        <div class="system-info">
+            <div class="system-icon orange">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </div>
+            <div>
+                <div class="system-label">回收站</div>
+                <div class="system-desc">查看已删除的记录</div>
+            </div>
+        </div>
+        <span class="system-arrow">&gt;</span>
+    </div>
+</div>
+
+<!-- 危险操作 -->
+<div class="card">
+    <div class="card-title">危险操作</div>
+    <div class="system-item" onclick="clearAllData()">
+        <div class="system-info">
+            <div class="system-icon red">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z"/></svg>
+            </div>
+            <div>
+                <div class="system-label">清空数据</div>
+                <div class="system-desc">删除所有记工记录</div>
+            </div>
+        </div>
+        <span class="system-arrow">&gt;</span>
+    </div>
+</div>
+
+<!-- 版本信息 -->
+<div class="version-info">
+    <p>记工App Web版</p>
+    <p id="versionInfo">v2.1.9.6</p>
+</div>
+
+<!-- 修改密码弹窗 -->
+<div class="modal-overlay" id="passwordModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">修改密码</span>
+            <button class="modal-close" onclick="closePasswordModal()">&times;</button>
+        </div>
+        <form id="passwordForm">
+            <div class="form-group">
+                <label class="form-label">当前密码</label>
+                <input type="password" class="form-input" id="currentPassword" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">新密码</label>
+                <input type="password" class="form-input" id="newPassword" required minlength="4">
+            </div>
+            <div class="form-group">
+                <label class="form-label">确认新密码</label>
+                <input type="password" class="form-input" id="confirmNewPassword" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">确认修改</button>
+        </form>
+    </div>
+</div>
+
+<!-- 用户管理弹窗 -->
+<div class="modal-overlay" id="userModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">用户管理</span>
+            <button class="modal-close" onclick="closeUserModal()">&times;</button>
+        </div>
+        <div id="userList"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+// 修改密码
+function showChangePassword() {
+    document.getElementById('passwordModal').classList.add('show');
+}
+
+function closePasswordModal() {
+    document.getElementById('passwordModal').classList.remove('show');
+    document.getElementById('passwordForm').reset();
+}
+
+document.getElementById('passwordForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const newPass = document.getElementById('newPassword').value;
+    const confirmPass = document.getElementById('confirmNewPassword').value;
+    
+    if (newPass !== confirmPass) {
+        alert('两次密码不一致');
+        return;
+    }
+    
+    try {
+        const res = await fetch('/api/user/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                current_password: document.getElementById('currentPassword').value,
+                new_password: newPass
+            })
+        });
+        
+        const json = await res.json();
+        
+        if (json.success) {
+            alert('密码修改成功');
+            closePasswordModal();
+        } else {
+            alert(json.message || '修改失败');
+        }
+    } catch (e) {
+        alert('网络错误');
+    }
+});
+
+// 用户管理
+async function showUserManagement() {
+    try {
+        const res = await fetch('/api/admin/users');
+        const json = await res.json();
+        
+        if (json.success) {
+            renderUserList(json.data);
+            document.getElementById('userModal').classList.add('show');
+        } else {
+            alert(json.message || '获取用户列表失败');
+        }
+    } catch (e) {
+        alert('网络错误');
+    }
+}
+
+function renderUserList(users) {
+    const container = document.getElementById('userList');
+    
+    if (users.length === 0) {
+        container.innerHTML = '<div class="empty-state">暂无用户</div>';
+        return;
+    }
+    
+    let html = '';
+    users.forEach(user => {
+        html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0;">
+                <div>
+                    <div style="font-weight: 500;">${user.username}</div>
+                    <div style="font-size: 12px; color: #999;">注册于 ${user.created_at}</div>
+                </div>
+                <button class="btn btn-outline" onclick="resetUserPassword(${user.id})">重置密码</button>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+async function resetUserPassword(userId) {
+    if (!confirm('确定要重置该用户密码吗？')) return;
+    
+    try {
+        const res = await fetch('/api/admin/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId })
+        });
+        
+        const json = await res.json();
+        alert(json.success ? '密码已重置为：123456' : '操作失败');
+    } catch (e) {
+        alert('网络错误');
+    }
+}
+
+function closeUserModal() {
+    document.getElementById('userModal').classList.remove('show');
+}
+
+// 导出数据
+async function exportData(format) {
+    try {
+        const res = await fetch(`/api/export?format=${format}`);
+        const blob = await res.blob();
+        
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `work_records_${new Date().toISOString().split('T')[0]}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (e) {
+        alert('导出失败');
+    }
+}
+
+// 回收站
+function showTrash() {
+    window.location.href = '/trash';
+}
+
+// 清空数据
+async function clearAllData() {
+    if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) return;
+    if (!confirm('再次确认：删除后数据将无法恢复！')) return;
+    
+    try {
+        const res = await fetch('/api/clear', { method: 'DELETE' });
+        const json = await res.json();
+        
+        alert(json.success ? '数据已清空' : '操作失败');
+        if (json.success) {
+            window.location.reload();
+        }
+    } catch (e) {
+        alert('网络错误');
+    }
+}
+{% endblock %}

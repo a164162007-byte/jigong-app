@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}设置 - 记工App{% endblock %}
+
+{% block extra_style %}
+<style>
+    .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #f0f0f0; }
+    .setting-item:last-child { border-bottom: none; }
+    .setting-info { flex: 1; }
+    .setting-label { font-size: 14px; color: #333; }
+    .setting-desc { font-size: 12px; color: #999; margin-top: 2px; }
+    .setting-input { width: 100px; text-align: right; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    
+    .setting-group { margin-bottom: 20px; }
+    .setting-group-title { font-size: 12px; color: #999; padding: 8px 0; text-transform: uppercase; }
+    
+    .switch { position: relative; width: 44px; height: 24px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 24px; }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+    input:checked + .slider { background-color: #2196F3; }
+    input:checked + .slider:before { transform: translateX(20px); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="setting-group">
+        <div class="setting-group-title">工时设置</div>
+        <div class="setting-item">
+            <div class="setting-info">
+                <div class="setting-label">每日标准工时</div>
+                <div class="setting-desc">用于计算加班和进度</div>
+            </div>
+            <input type="number" class="setting-input" id="dailyHours" value="8" step="0.5">
+        </div>
+        <div class="setting-item">
+            <div class="setting-info">
+                <div class="setting-label">加班费率</div>
+                <div class="setting-desc">每小时加班工资</div>
+            </div>
+            <input type="number" class="setting-input" id="overtimeRate" value="8">
+        </div>
+        <div class="setting-item">
+            <div class="setting-info">
+                <div class="setting-label">饭补标准</div>
+                <div class="setting-desc">每次饭补金额</div>
+            </div>
+            <input type="number" class="setting-input" id="mealSubsidy" value="15">
+        </div>
+    </div>
+    
+    <div class="setting-group">
+        <div class="setting-group-title">工资设置</div>
+        <div class="setting-item">
+            <div class="setting-info">
+                <div class="setting-label">日工资标准</div>
+                <div class="setting-desc">用于计算应发工资</div>
+            </div>
+            <input type="number" class="setting-input" id="dailyWage" value="0">
+        </div>
+    </div>
+    
+    <div class="setting-group">
+        <div class="setting-group-title">提醒设置</div>
+        <div class="setting-item">
+            <div class="setting-info">
+                <div class="setting-label">下班提醒</div>
+                <div class="setting-desc">提醒下班打卡</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="offworkReminder">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="setting-item" id="offworkTimeRow" style="display: none;">
+            <div class="setting-info">
+                <div class="setting-label">提醒时间</div>
+            </div>
+            <input type="time" class="setting-input" id="offworkTime" value="18:00">
+        </div>
+    </div>
+    
+    <div class="setting-group">
+        <div class="setting-group-title">备份设置</div>
+        <div class="setting-item">
+            <div class="setting-info">
+                <div class="setting-label">自动备份间隔</div>
+                <div class="setting-desc">单位：天，0表示关闭</div>
+            </div>
+            <input type="number" class="setting-input" id="backupInterval" value="7" min="0">
+        </div>
+        <div class="setting-item">
+            <div class="setting-info">
+                <div class="setting-label">备份保留份数</div>
+            </div>
+            <input type="number" class="setting-input" id="backupCount" value="3" min="1">
+        </div>
+    </div>
+    
+    <button class="btn btn-primary btn-block" onclick="saveSettings()" style="margin-top: 20px;">保存设置</button>
+</div>
+
+<div class="card">
+    <div class="setting-group">
+        <div class="setting-group-title">快捷短语</div>
+        <div class="form-group">
+            <textarea class="form-input" id="quickPhrases" rows="3" placeholder='JSON数组格式，如：["调休","出差"]'></textarea>
+        </div>
+    </div>
+    <button class="btn btn-outline btn-block" onclick="savePhrases()">保存短语</button>
+</div>
+{% endblock %}
+
+{% block js %}
+document.addEventListener('DOMContentLoaded', function() {
+    loadSettings();
+    
+    // 下班提醒开关
+    document.getElementById('offworkReminder').addEventListener('change', function() {
+        document.getElementById('offworkTimeRow').style.display = this.checked ? 'flex' : 'none';
+    });
+});
+
+async function loadSettings() {
+    try {
+        const res = await fetch('/api/settings');
+        const json = await res.json();
+        
+        if (json.success && json.data) {
+            const data = json.data;
+            
+            document.getElementById('dailyHours').value = data.daily_hours || 8;
+            document.getElementById('overtimeRate').value = data.overtime_rate || 8;
+            document.getElementById('mealSubsidy').value = data.meal_subsidy || 15;
+            document.getElementById('dailyWage').value = data.daily_wage || 0;
+            document.getElementById('backupInterval').value = data.backup_interval || 7;
+            document.getElementById('backupCount').value = data.backup_count || 3;
+            document.getElementById('offworkTime').value = data.offwork_time || '18:00';
+            
+            const reminderOn = data.enable_offwork_reminder === '1';
+            document.getElementById('offworkReminder').checked = reminderOn;
+            document.getElementById('offworkTimeRow').style.display = reminderOn ? 'flex' : 'none';
+            
+            try {
+                const phrases = JSON.parse(data.quick_phrases || '[]');
+                document.getElementById('quickPhrases').value = JSON.stringify(phrases, null, 2);
+            } catch (e) {}
+        }
+    } catch (e) {
+        alert('加载设置失败');
+    }
+}
+
+async function saveSettings() {
+    const data = {
+        daily_hours: document.getElementById('dailyHours').value,
+        overtime_rate: document.getElementById('overtimeRate').value,
+        meal_subsidy: document.getElementById('mealSubsidy').value,
+        daily_wage: document.getElementById('dailyWage').value,
+        backup_interval: document.getElementById('backupInterval').value,
+        backup_count: document.getElementById('backupCount').value,
+        offwork_time: document.getElementById('offworkTime').value,
+        enable_offwork_reminder: document.getElementById('offworkReminder').checked ? '1' : '0'
+    };
+    
+    try {
+        const res = await fetch('/api/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        const json = await res.json();
+        
+        if (json.success) {
+            alert('设置已保存');
+        } else {
+            alert(json.message || '保存失败');
+        }
+    } catch (e) {
+        alert('网络错误');
+    }
+}
+
+async function savePhrases() {
+    const text = document.getElementById('quickPhrases').value;
+    
+    try {
+        JSON.parse(text); // 验证格式
+    } catch (e) {
+        alert('JSON格式不正确');
+        return;
+    }
+    
+    try {
+        const res = await fetch('/api/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quick_phrases: text })
+        });
+        
+        const json = await res.json();
+        alert(json.success ? '已保存' : '保存失败');
+    } catch (e) {
+        alert('网络错误');
+    }
+}
+{% endblock %}
