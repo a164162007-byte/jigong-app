@@ -237,38 +237,100 @@ class HomeViewModel(
         isManual: Boolean
     ) {
         val editingRecord = _uiState.value.editingRecord
+        val settings = settingsRepository.settings.first()
+        val dailyWorkHours = settings.dailyWorkHours
         
-        // 业务规则：标准工(!isOvertime && !isManual)强制mealSubsidy=true，加班(isOvertime)强制mealSubsidy=false
-        // 手动折算的饭补可以自由选择
-        val finalMealSubsidy = when {
-            isOvertime -> false  // 加班没有饭补
-            !isOvertime && !isManual -> true  // 标准工必须有饭补
-            else -> mealSubsidy  // 手动折算可以自由选择
-        }
+        // 自动拆分：当 hours > dailyWorkHours 且类型是标准工或手动折算时，拆分为两条记录
+        val shouldSplit = !isOvertime && hours > dailyWorkHours
         
         if (editingRecord != null) {
-            val updated = editingRecord.copy(
-                date = date,
-                hours = hours,
-                isOvertime = isOvertime,
-                location = location,
-                remark = remark,
-                mealSubsidy = finalMealSubsidy,
-                isManual = isManual,
-                updatedAt = System.currentTimeMillis()
-            )
-            workRepository.update(updated)
+            if (shouldSplit) {
+                // 编辑模式下的拆分：先删原记录，再插入两条新记录
+                val updatedStandard = editingRecord.copy(
+                    date = date,
+                    hours = dailyWorkHours,
+                    isOvertime = false,
+                    location = location,
+                    remark = remark,
+                    mealSubsidy = true,  // 标准工必有饭补
+                    isManual = isManual,
+                    updatedAt = System.currentTimeMillis()
+                )
+                val newOvertime = WorkRecord(
+                    date = date,
+                    hours = hours - dailyWorkHours,
+                    isOvertime = true,
+                    location = location,
+                    remark = "",
+                    mealSubsidy = false,  // 加班无饭补
+                    isManual = false
+                )
+                workRepository.update(updatedStandard)
+                workRepository.insert(newOvertime)
+            } else {
+                // 业务规则：标准工(!isOvertime && !isManual)强制mealSubsidy=true，加班(isOvertime)强制mealSubsidy=false
+                // 手动折算的饭补可以自由选择
+                val finalMealSubsidy = when {
+                    isOvertime -> false  // 加班没有饭补
+                    !isOvertime && !isManual -> true  // 标准工必须有饭补
+                    else -> mealSubsidy  // 手动折算可以自由选择
+                }
+                val updated = editingRecord.copy(
+                    date = date,
+                    hours = hours,
+                    isOvertime = isOvertime,
+                    location = location,
+                    remark = remark,
+                    mealSubsidy = finalMealSubsidy,
+                    isManual = isManual,
+                    updatedAt = System.currentTimeMillis()
+                )
+                workRepository.update(updated)
+            }
         } else {
-            val newRecord = WorkRecord(
-                date = date,
-                hours = hours,
-                isOvertime = isOvertime,
-                location = location,
-                remark = remark,
-                mealSubsidy = finalMealSubsidy,
-                isManual = isManual
-            )
-            workRepository.insert(newRecord)
+            if (shouldSplit) {
+                // 新增模式下的拆分：插入两条记录
+                // 记录1：标准工 dailyWorkHours 小时，有饭补
+                val standardRecord = WorkRecord(
+                    date = date,
+                    hours = dailyWorkHours,
+                    isOvertime = false,
+                    location = location,
+                    remark = remark,
+                    mealSubsidy = true,  // 标准工必有饭补
+                    isManual = isManual
+                )
+                // 记录2：加班 剩余小时数，无饭补
+                val overtimeRecord = WorkRecord(
+                    date = date,
+                    hours = hours - dailyWorkHours,
+                    isOvertime = true,
+                    location = location,
+                    remark = "",
+                    mealSubsidy = false,  // 加班无饭补
+                    isManual = false
+                )
+                workRepository.insert(standardRecord)
+                workRepository.insert(overtimeRecord)
+            } else {
+                // 业务规则：标准工(!isOvertime && !isManual)强制mealSubsidy=true，加班(isOvertime)强制mealSubsidy=false
+                // 手动折算的饭补可以自由选择
+                val finalMealSubsidy = when {
+                    isOvertime -> false  // 加班没有饭补
+                    !isOvertime && !isManual -> true  // 标准工必须有饭补
+                    else -> mealSubsidy  // 手动折算可以自由选择
+                }
+                val newRecord = WorkRecord(
+                    date = date,
+                    hours = hours,
+                    isOvertime = isOvertime,
+                    location = location,
+                    remark = remark,
+                    mealSubsidy = finalMealSubsidy,
+                    isManual = isManual
+                )
+                workRepository.insert(newRecord)
+            }
         }
         
         _uiState.update { it.copy(showAddDialog = false, editingRecord = null) }

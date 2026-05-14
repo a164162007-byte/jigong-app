@@ -18,7 +18,7 @@
 版本: 1.19.0
 """
 
-VERSION = 'v2.1.9.7'
+VERSION = 'v2.1.9.9'
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import os
@@ -412,7 +412,7 @@ def api_add_record():
     - afternoon_start_time: 下午上班时间（可选）
     - hours: 工作时长（小时）
     - force_add: 是否强制添加（用于重复打卡确认后）
-    - auto_split_overtime: 是否自动拆分加班（手动记工超过标准工时时生效）
+    - auto_split_overtime: 是否自动拆分加班（标准工或手动折算超过标准工时时生效）
     """
     data = request.get_json()
     
@@ -444,10 +444,10 @@ def api_add_record():
             })
     
     try:
-        # 自动拆分加班：手动记工超过标准工时时，自动拆分为标准工+加班
-        if auto_split_overtime and record_type == 'manual' and hours:
+        # 自动拆分加班：标准工或手动折算超过标准工时时，自动拆分为标准工+加班
+        if auto_split_overtime and record_type in ('manual', 'standard') and hours:
             settings = get_all_settings(session['user_id'])
-            daily_hours = float(settings.get('daily_hours', 8))
+            daily_hours = float(settings.get('daily_hours', 9))
             
             if float(hours) > daily_hours:
                 overtime_hours = float(hours) - daily_hours

@@ -6,15 +6,15 @@ import com.worklogger.app.model.WorkRecord
 /**
  * 统计计算工具类
  * 
- * 核心规则：
- * - 标准工：hours <= dailyWorkHours 时按比例换算（9小时=1工，4.5小时=0.5工）
- *           hours > dailyWorkHours 时标准工算1工，超出部分按加班折算
- *           例如：12小时 = 1工(标准) + 3小时(加班) = 1 + 3/8 = 1.375工
- * - 加班工：hours / overtimeWorkHours = 工数（8小时=1工，4小时=0.5工）
- * - 手动折算：同标准工逻辑，超出部分按加班折算
+ * 核心规则（v2.1.9.9）：
+ * - 自动拆分：当输入工时 > dailyWorkHours 时，系统自动拆分为两条记录：
+ *   标准工(manual折算)最多 dailyWorkHours 小时，剩余部分存为独立加班记录
+ * - 标准工天数：直接 sum(hours / dailyWorkHours)，因为超出部分已被拆分
+ * - 加班工时：只从 isOvertime=true 的记录中累加
+ * - 手动折算天数：直接 sum(hours / dailyWorkHours)
  * - 饭补：只有标准工和手动折算有饭补，加班没有饭补
- *         饭补按工时比例换算，但最多1天饭补（超出部分无饭补）
- *         例如：9小时=30元，4.5小时=15元，12小时=30元(超出3小时加班无饭补)
+ *   饭补按工时比例换算：(hours / dailyWorkHours) × mealSubsidyStandard
+ *   例如：9小时=30元，4.5小时=15元
  */
 object StatsCalculator {
     
@@ -44,47 +44,18 @@ object StatsCalculator {
         val manualRecords = records.filter { it.isManual && !it.isOvertime }
         val overtimeRecords = records.filter { it.isOvertime }
         
-        // 标准工天数：hours <= dailyWorkHours 时按比例换算，超出部分按加班计算
-        // 例如：9小时=1工, 4.5小时=0.5工, 12小时=1工(标准)+3小时(加班)
+        // 标准工天数：直接 sum(hours / dailyWorkHours)，超出部分已被自动拆分
         val standardDays = if (dailyWorkHours > 0) {
-            standardRecords.sumOf { record ->
-                val hours = record.hours
-                if (hours <= dailyWorkHours) {
-                    hours / dailyWorkHours  // 按比例：4.5h / 9h = 0.5工
-                } else {
-                    1.0  // 超出标准工时的部分，标准工算1工，超出部分计入加班
-                }
-            }
+            standardRecords.sumOf { it.hours / dailyWorkHours }
         } else 0.0
         
-        // 手动折算天数：同样逻辑，hours <= dailyWorkHours 按比例，超出部分按加班
+        // 手动折算天数：直接 sum(hours / dailyWorkHours)
         val manualDays = if (dailyWorkHours > 0) {
-            manualRecords.sumOf { record ->
-                val hours = record.hours
-                if (hours <= dailyWorkHours) {
-                    hours / dailyWorkHours  // 按比例：4.5h / 9h = 0.5工
-                } else {
-                    1.0  // 超出部分计入加班
-                }
-            }
+            manualRecords.sumOf { it.hours / dailyWorkHours }
         } else 0.0
         
-        // 加班总小时 = 单独加班记录 + 标准/手动折算中超出标准工时的部分
-        val overtimeFromStandard = if (dailyWorkHours > 0) {
-            standardRecords.sumOf { record ->
-                val hours = record.hours
-                if (hours > dailyWorkHours) hours - dailyWorkHours else 0.0
-            }
-        } else 0.0
-        
-        val overtimeFromManual = if (dailyWorkHours > 0) {
-            manualRecords.sumOf { record ->
-                val hours = record.hours
-                if (hours > dailyWorkHours) hours - dailyWorkHours else 0.0
-            }
-        } else 0.0
-        
-        val overtimeHours = overtimeRecords.sumOf { it.hours } + overtimeFromStandard + overtimeFromManual
+        // 加班总小时：只从独立加班记录中累加（超出部分已被自动拆分）
+        val overtimeHours = overtimeRecords.sumOf { it.hours }
         
         // 加班天数：按加班工时标准换算（hours / overtimeWorkHours）
         val overtimeDays = if (overtimeWorkHours > 0) {
@@ -95,34 +66,19 @@ object StatsCalculator {
         val totalStandard = standardDays + manualDays + overtimeDays
         
         // 饭补计算：只有标准工和手动折算有饭补，加班没有饭补！
-        // 饭补按工时比例换算：(hours / dailyWorkHours) × mealSubsidyStandard
+        // 每条记录按工时比例换算：hours / dailyWorkHours × mealSubsidyStandard
         
-        // 标准工饭补：按工时比例，但超过标准工时的部分不额外计算饭补
-        // 例如：9小时=30元, 4.5小时=15元, 12小时=30元(超出3小时加班无饭补)
+        // 标准工饭补：按工时比例
         val standardMealSubsidy = if (dailyWorkHours > 0) {
             standardRecords.sumOf { record ->
-                if (record.mealSubsidy) {
-                    val hours = record.hours
-                    if (hours <= dailyWorkHours) {
-                        hours / dailyWorkHours  // 按比例
-                    } else {
-                        1.0  // 超出部分无饭补，最多1天饭补
-                    }
-                } else 0.0
+                if (record.mealSubsidy) record.hours / dailyWorkHours else 0.0
             } * mealSubsidyStandard
         } else 0.0
         
-        // 手动折算饭补：同样逻辑
+        // 手动折算饭补：按工时比例
         val manualMealSubsidy = if (dailyWorkHours > 0) {
             manualRecords.sumOf { record ->
-                if (record.mealSubsidy) {
-                    val hours = record.hours
-                    if (hours <= dailyWorkHours) {
-                        hours / dailyWorkHours  // 按比例
-                    } else {
-                        1.0  // 超出部分无饭补
-                    }
-                } else 0.0
+                if (record.mealSubsidy) record.hours / dailyWorkHours else 0.0
             } * mealSubsidyStandard
         } else 0.0
         

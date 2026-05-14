@@ -112,18 +112,50 @@ class CalendarViewModel(
     fun saveEditedRecord(date: String, hours: Double, isOvertime: Boolean, location: String, remark: String, mealSubsidy: Boolean, isManual: Boolean) {
         val record = _uiState.value.editingRecord ?: return
         viewModelScope.launch {
-            // 业务规则：标准工强制mealSubsidy=true，加班强制mealSubsidy=false，手动折算可自由选择
-            val finalMealSubsidy = when {
-                isOvertime -> false
-                !isOvertime && !isManual -> true
-                else -> mealSubsidy
+            val settings = settingsRepository.settings.first()
+            val dailyWorkHours = settings.dailyWorkHours
+            
+            // 自动拆分：当 hours > dailyWorkHours 且类型是标准工或手动折算时，拆分为两条记录
+            val shouldSplit = !isOvertime && hours > dailyWorkHours
+            
+            if (shouldSplit) {
+                // 更新标准工记录
+                val updatedStandard = record.copy(
+                    date = date,
+                    hours = dailyWorkHours,
+                    isOvertime = false,
+                    location = location,
+                    remark = remark,
+                    mealSubsidy = true,  // 标准工必有饭补
+                    isManual = isManual,
+                    updatedAt = System.currentTimeMillis()
+                )
+                // 新增加班记录
+                val newOvertime = WorkRecord(
+                    date = date,
+                    hours = hours - dailyWorkHours,
+                    isOvertime = true,
+                    location = location,
+                    remark = "",
+                    mealSubsidy = false,  // 加班无饭补
+                    isManual = false
+                )
+                workRepository.update(updatedStandard)
+                workRepository.insert(newOvertime)
+            } else {
+                // 业务规则：标准工强制mealSubsidy=true，加班强制mealSubsidy=false，手动折算可自由选择
+                val finalMealSubsidy = when {
+                    isOvertime -> false
+                    !isOvertime && !isManual -> true
+                    else -> mealSubsidy
+                }
+                val updatedRecord = record.copy(
+                    date = date, hours = hours, isOvertime = isOvertime,
+                    location = location, remark = remark, mealSubsidy = finalMealSubsidy,
+                    isManual = isManual, updatedAt = System.currentTimeMillis()
+                )
+                workRepository.update(updatedRecord)
             }
-            val updatedRecord = record.copy(
-                date = date, hours = hours, isOvertime = isOvertime,
-                location = location, remark = remark, mealSubsidy = finalMealSubsidy,
-                isManual = isManual, updatedAt = System.currentTimeMillis()
-            )
-            workRepository.update(updatedRecord)
             hideEditDialog()
             refresh()
         }

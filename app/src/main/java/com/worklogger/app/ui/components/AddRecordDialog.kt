@@ -105,6 +105,16 @@ fun AddRecordDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 
+                val excessHours = (hours.toDoubleOrNull() ?: 0.0) - 9.0
+                if (!isOvertime && excessHours > 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "超出标准工时${String.format("%.1f", excessHours)}小时将自动折算为加班",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RecordOvertime
+                    )
+                }
+                
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
@@ -151,6 +161,7 @@ fun AddRecordDialog(
                             isManual = !isManual
                             if (isManual) {
                                 isOvertime = false
+                                mealSubsidy = true  // 手动折算默认有饭补
                             } else {
                                 // 取消手动折算时回到标准工，饭补强制为true
                                 mealSubsidy = true
@@ -173,7 +184,7 @@ fun AddRecordDialog(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(listOf(1, 2, 3, 4, 5, 6, 7, 8)) { h ->
+                    items(listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)) { h ->
                         FilterChip(
                             selected = hours.toDoubleOrNull() == h.toDouble(),
                             onClick = { hours = h.toString() },

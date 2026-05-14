@@ -332,15 +332,10 @@ def create_user(username, password):
         
         # 为新用户初始化默认设置
         default_settings = {
-            'daily_hours': '8',
+            'daily_hours': '9',
             'overtime_rate': '8',
-            'meal_subsidy': '15',
-            'backup_interval': '7',
-            'backup_count': '3',
-            'font_size': '16',
-            'theme': 'auto',
-            'trash_retention': '30',
-            'daily_wage': '0',
+            'meal_subsidy': '30',
+            'daily_wage': '260',
             'monthly_hours_target': '0',
             # v1.13.0新增设置
             'enable_missed_reminder': '1',
@@ -1010,10 +1005,10 @@ def get_statistics(user_id, start_date=None, end_date=None, year=None, month=Non
     """
     # 获取用户设置
     settings = get_all_settings(user_id)
-    daily_hours = float(settings.get('daily_hours', 8))
+    daily_hours = float(settings.get('daily_hours', 9))
     overtime_rate = float(settings.get('overtime_rate', 8))
-    meal_subsidy = float(settings.get('meal_subsidy', 15))
-    daily_wage = float(settings.get('daily_wage', 0))
+    meal_subsidy_per_day = float(settings.get('meal_subsidy', 30))
+    daily_wage = float(settings.get('daily_wage', 260))
     
     # 获取记录
     if year:
@@ -1025,24 +1020,29 @@ def get_statistics(user_id, start_date=None, end_date=None, year=None, month=Non
     else:
         records = get_work_records(user_id, limit=10000)
     
-    # 统计计算
-    standard_count = 0
-    overtime_hours = 0
-    manual_hours = 0
+    # 统计计算（v2.1.9.9：自动拆分逻辑已在保存时处理，统计时直接按比例计算）
+    standard_hours = 0.0
+    overtime_hours = 0.0
+    manual_hours = 0.0
+    standard_meal_subsidy_hours = 0.0  # 标准工饭补小时数
+    manual_meal_subsidy_hours = 0.0    # 手动折算饭补小时数
     location_stats = {}
     
     for record in records:
         hours = record.get('hours') or 0
         location = record.get('location', '未知地点')
+        meal_subsidy = record.get('meal_subsidy', 0) or 0  # Docker中存的是金额，>0表示有饭补
         
         if location not in location_stats:
             location_stats[location] = {'days': 0, 'hours': 0, 'standard': 0, 'overtime': 0, 'manual': 0}
         
         if record['record_type'] == 'standard':
-            standard_count += 1
-            location_stats[location]['days'] += 1
+            standard_hours += hours
+            location_stats[location]['days'] += hours / daily_hours if daily_hours > 0 else 0
             location_stats[location]['hours'] += hours
-            location_stats[location]['standard'] += 1
+            location_stats[location]['standard'] += hours / daily_hours if daily_hours > 0 else 0
+            if meal_subsidy > 0:
+                standard_meal_subsidy_hours += hours
         elif record['record_type'] == 'overtime':
             overtime_hours += hours
             location_stats[location]['hours'] += hours
@@ -1050,32 +1050,34 @@ def get_statistics(user_id, start_date=None, end_date=None, year=None, month=Non
         elif record['record_type'] == 'manual':
             manual_hours += hours
             location_stats[location]['hours'] += hours
-            location_stats[location]['manual'] += hours
+            location_stats[location]['manual'] += hours / daily_hours if daily_hours > 0 else 0
+            if meal_subsidy > 0:
+                manual_meal_subsidy_hours += hours
     
-    # 计算折算
-    overtime_standard = overtime_hours / overtime_rate if overtime_rate > 0 else 0
-    manual_standard = manual_hours / daily_hours if daily_hours > 0 else 0
-    total_standard = standard_count + overtime_standard + manual_standard
-    # 饭补计算：标准工全额 + 手动记工按工时比例，加班无饭补
-    meal_subsidy_total = (standard_count * meal_subsidy) + (manual_hours / daily_hours * meal_subsidy) if daily_hours > 0 else standard_count * meal_subsidy
+    # 折算工数计算
+    standard_days = standard_hours / daily_hours if daily_hours > 0 else 0
+    manual_days = manual_hours / daily_hours if daily_hours > 0 else 0
+    overtime_days = overtime_hours / overtime_rate if overtime_rate > 0 else 0
+    total_standard = standard_days + manual_days + overtime_days
+    
+    # 饭补计算：标准工和手动折算按工时比例（每条记录最多1天饭补），加班无饭补
+    meal_subsidy_total = (
+        (standard_meal_subsidy_hours / daily_hours * meal_subsidy_per_day) +
+        (manual_meal_subsidy_hours / daily_hours * meal_subsidy_per_day)
+    ) if daily_hours > 0 else 0
     
     # 计算应发工资
-    # 月度应发工资 = 总标准工 × 日工资
     total_wage = total_standard * daily_wage
     
     # 为每个地点计算折算工数
     for loc in location_stats:
         loc_data = location_stats[loc]
-        # 标准工数量
         loc_data['standard_count'] = loc_data['standard']
-        # 手动折算工数
-        loc_data['manual_standard'] = loc_data['manual'] / daily_hours if daily_hours > 0 else 0
-        # 加班折算工数
+        loc_data['manual_standard'] = loc_data['manual']
         loc_data['overtime_standard'] = loc_data['overtime'] / overtime_rate if overtime_rate > 0 else 0
-        # 总折算工数
         loc_data['standard_equivalent'] = (
-            loc_data['standard'] + 
-            loc_data['manual_standard'] +
+            loc_data['standard'] +
+            loc_data['manual'] +
             loc_data['overtime_standard']
         )
     
@@ -1083,11 +1085,11 @@ def get_statistics(user_id, start_date=None, end_date=None, year=None, month=Non
     overtime_distribution = calculate_overtime_distribution(records, overtime_rate)
     
     return {
-        'standard_count': standard_count,
+        'standard_count': standard_hours,
         'overtime_hours': round(overtime_hours, 2),
-        'overtime_standard': round(overtime_standard, 2),
+        'overtime_standard': round(overtime_days, 2),
         'manual_hours': round(manual_hours, 2),
-        'manual_standard': round(manual_standard, 2),
+        'manual_standard': round(manual_days, 2),
         'total_standard': round(total_standard, 2),
         'meal_subsidy': round(meal_subsidy_total, 2),
         'daily_wage': daily_wage,
@@ -1469,20 +1471,22 @@ def get_yearly_report(user_id, year):
         dict: 年度统计数据
     """
     settings = get_all_settings(user_id)
-    daily_hours = float(settings.get('daily_hours', 8))
+    daily_hours = float(settings.get('daily_hours', 9))
     overtime_rate = float(settings.get('overtime_rate', 8))
-    meal_subsidy = float(settings.get('meal_subsidy', 15))
-    daily_wage = float(settings.get('daily_wage', 0))
+    meal_subsidy_per_day = float(settings.get('meal_subsidy', 30))
+    daily_wage = float(settings.get('daily_wage', 260))
     
     # 获取全年记录
     records = get_records_by_year(user_id, year)
     
-    # 基本统计
-    total_standard = 0
-    total_overtime_hours = 0
-    total_manual_hours = 0
+    # 基本统计（v2.1.9.9：自动拆分逻辑已在保存时处理，统计时直接按比例计算）
+    standard_hours = 0.0
+    total_overtime_hours = 0.0
+    total_manual_hours = 0.0
     work_days = set()  # 工作天数
     location_count = {}  # 地点统计
+    standard_meal_hours = 0.0  # 标准工有饭补的小时数
+    manual_meal_hours = 0.0    # 手动折算有饭补的小时数
     
     # 月度统计
     monthly_data = {m: {'standard': 0, 'overtime': 0, 'manual': 0, 'total': 0, 'days': 0} 
@@ -1493,6 +1497,7 @@ def get_yearly_report(user_id, year):
         month = int(record['work_date'].split('-')[1])
         location = record.get('location', '未知地点')
         work_date = record['work_date']
+        meal_subsidy = record.get('meal_subsidy', 0) or 0
         
         work_days.add(work_date)
         
@@ -1501,42 +1506,68 @@ def get_yearly_report(user_id, year):
         
         # 按类型统计
         if record['record_type'] == 'standard':
-            total_standard += 1
-            monthly_data[month]['standard'] += 1
+            standard_hours += hours
+            monthly_data[month]['standard'] += hours / daily_hours if daily_hours > 0 else 0
+            if meal_subsidy > 0:
+                standard_meal_hours += hours
         elif record['record_type'] == 'overtime':
             total_overtime_hours += hours
             monthly_data[month]['overtime'] += hours
-            total_standard += hours / overtime_rate if overtime_rate > 0 else 0
         elif record['record_type'] == 'manual':
             total_manual_hours += hours
-            monthly_data[month]['manual'] += hours
-            total_standard += hours / daily_hours if daily_hours > 0 else 0
+            monthly_data[month]['manual'] += hours / daily_hours if daily_hours > 0 else 0
+            if meal_subsidy > 0:
+                manual_meal_hours += hours
         
-        monthly_data[month]['total'] += hours / overtime_rate if record['record_type'] == 'overtime' else (hours / daily_hours if record['record_type'] == 'manual' else 1)
+        # 月度折算工数
+        if record['record_type'] == 'standard':
+            monthly_data[month]['total'] += hours / daily_hours if daily_hours > 0 else 0
+        elif record['record_type'] == 'overtime':
+            monthly_data[month]['total'] += hours / overtime_rate if overtime_rate > 0 else 0
+        elif record['record_type'] == 'manual':
+            monthly_data[month]['total'] += hours / daily_hours if daily_hours > 0 else 0
         monthly_data[month]['days'] += 1
+    
+    # 计算总折算工数
+    standard_days = standard_hours / daily_hours if daily_hours > 0 else 0
+    manual_days = total_manual_hours / daily_hours if daily_hours > 0 else 0
+    overtime_days = total_overtime_hours / overtime_rate if overtime_rate > 0 else 0
+    total_standard = standard_days + manual_days + overtime_days
     
     # TOP3地点
     top_locations = sorted(location_count.items(), key=lambda x: x[1], reverse=True)[:3]
     
     # 平均每日工时
-    avg_daily_hours = total_standard / len(work_days) if work_days else 0
+    avg_daily_hours = (standard_hours + total_overtime_hours + total_manual_hours) / len(work_days) if work_days else 0
     
     # 计算去年数据（用于对比）
     last_year_records = get_records_by_year(user_id, year - 1)
-    last_year_hours = 0
+    last_year_standard_hours = 0.0
+    last_year_overtime_hours = 0.0
+    last_year_manual_hours = 0.0
     for record in last_year_records:
         hours = record.get('hours') or 0
         if record['record_type'] == 'overtime':
-            last_year_hours += hours / overtime_rate
+            last_year_overtime_hours += hours
         elif record['record_type'] == 'manual':
-            last_year_hours += hours / daily_hours
+            last_year_manual_hours += hours
         else:
-            last_year_hours += 1
+            last_year_standard_hours += hours
+    last_year_standard_days = last_year_standard_hours / daily_hours if daily_hours > 0 else 0
+    last_year_manual_days = last_year_manual_hours / daily_hours if daily_hours > 0 else 0
+    last_year_overtime_days = last_year_overtime_hours / overtime_rate if overtime_rate > 0 else 0
+    last_year_total = last_year_standard_days + last_year_manual_days + last_year_overtime_days
     
     # 同比增长
     yoy_change = 0
-    if last_year_hours > 0:
-        yoy_change = round(((total_standard - last_year_hours) / last_year_hours) * 100, 1)
+    if last_year_total > 0:
+        yoy_change = round(((total_standard - last_year_total) / last_year_total) * 100, 1)
+    
+    # 饭补计算
+    total_meal_subsidy = (
+        (standard_meal_hours / daily_hours * meal_subsidy_per_day) +
+        (manual_meal_hours / daily_hours * meal_subsidy_per_day)
+    ) if daily_hours > 0 else 0
     
     return {
         'year': year,
@@ -1544,14 +1575,14 @@ def get_yearly_report(user_id, year):
         'total_work_days': len(work_days),
         'avg_daily_hours': round(avg_daily_hours, 2),
         'total_overtime_hours': round(total_overtime_hours, 2),
-        'total_meal_subsidy': round((len([r for r in records if r['record_type'] == 'standard']) * meal_subsidy) + (total_manual_hours / daily_hours * meal_subsidy if daily_hours > 0 else 0), 2),
+        'total_meal_subsidy': round(total_meal_subsidy, 2),
         'total_wage': round(total_standard * daily_wage, 2),
         'top_locations': [{'location': loc, 'count': count} for loc, count in top_locations],
         'monthly_data': {
             'labels': [f"{year}-{m:02d}" for m in range(1, 13)],
             'values': [round(monthly_data[m]['total'], 2) for m in range(1, 13)]
         },
-        'last_year_hours': round(last_year_hours, 2),
+        'last_year_hours': round(last_year_total, 2),
         'yoy_change': yoy_change
     }
 
