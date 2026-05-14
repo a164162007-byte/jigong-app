@@ -39,7 +39,7 @@ fun AddRecordDialog(
     var hours by remember { mutableStateOf(record?.hours?.toString() ?: "9") }
     var location by remember { mutableStateOf(record?.location ?: "") }
     var remark by remember { mutableStateOf(record?.remark ?: "") }
-    var mealSubsidy by remember { mutableStateOf(record?.mealSubsidy ?: false) }
+    var mealSubsidy by remember { mutableStateOf(record?.mealSubsidy ?: true) }
     var isManual by remember { mutableStateOf(record?.isManual ?: false) }
     var isOvertime by remember { mutableStateOf(record?.isOvertime ?: false) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -134,6 +134,9 @@ fun AddRecordDialog(
                             if (isOvertime) {
                                 isManual = false
                                 mealSubsidy = false
+                            } else {
+                                // 取消加班时回到标准工，饭补强制为true
+                                mealSubsidy = true
                             }
                         },
                         label = { Text("加班") },
@@ -146,7 +149,12 @@ fun AddRecordDialog(
                         selected = isManual,
                         onClick = {
                             isManual = !isManual
-                            if (isManual) isOvertime = false
+                            if (isManual) {
+                                isOvertime = false
+                            } else {
+                                // 取消手动折算时回到标准工，饭补强制为true
+                                mealSubsidy = true
+                            }
                         },
                         label = { Text("手动折算") },
                         colors = FilterChipDefaults.filterChipColors(

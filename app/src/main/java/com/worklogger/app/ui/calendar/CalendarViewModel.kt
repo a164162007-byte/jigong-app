@@ -112,9 +112,15 @@ class CalendarViewModel(
     fun saveEditedRecord(date: String, hours: Double, isOvertime: Boolean, location: String, remark: String, mealSubsidy: Boolean, isManual: Boolean) {
         val record = _uiState.value.editingRecord ?: return
         viewModelScope.launch {
+            // 业务规则：标准工强制mealSubsidy=true，加班强制mealSubsidy=false，手动折算可自由选择
+            val finalMealSubsidy = when {
+                isOvertime -> false
+                !isOvertime && !isManual -> true
+                else -> mealSubsidy
+            }
             val updatedRecord = record.copy(
                 date = date, hours = hours, isOvertime = isOvertime,
-                location = location, remark = remark, mealSubsidy = mealSubsidy,
+                location = location, remark = remark, mealSubsidy = finalMealSubsidy,
                 isManual = isManual, updatedAt = System.currentTimeMillis()
             )
             workRepository.update(updatedRecord)
