@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+
+{% block title %}记工 - 记工App{% endblock %}
+
+{% block extra_style %}
+<style>
+    .quick-add { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+    .quick-btn { padding: 16px 12px; text-align: center; border-radius: 8px; cursor: pointer; border: none; font-size: 14px; transition: transform 0.1s; }
+    .quick-btn:active { transform: scale(0.95); }
+    .quick-btn.standard { background: #E3F2FD; color: #1976D2; }
+    .quick-btn.manual { background: #E8F5E9; color: #388E3C; }
+    .quick-btn.overtime { background: #FFF3E0; color: #F57C00; }
+    .quick-btn svg { width: 24px; height: 24px; margin-bottom: 4px; }
+    
+    .add-form { margin-top: 16px; }
+    .form-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .form-row .form-group { flex: 1; margin-bottom: 0; }
+    
+    .records-section { margin-top: 24px; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .section-title { font-size: 16px; font-weight: 500; }
+    
+    .today-stats { background: linear-gradient(135deg, #2196F3, #1976D2); color: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+    .today-stats h3 { font-size: 14px; opacity: 0.9; margin-bottom: 8px; }
+    .today-stats .value { font-size: 32px; font-weight: bold; }
+    .today-stats .unit { font-size: 14px; opacity: 0.9; margin-left: 4px; }
+    .today-progress { background: rgba(255,255,255,0.2); height: 8px; border-radius: 4px; margin-top: 12px; overflow: hidden; }
+    .today-progress-bar { background: white; height: 100%; border-radius: 4px; transition: width 0.3s; }
+    
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; }
+    .filter-chip { padding: 6px 12px; border-radius: 16px; background: white; border: 1px solid #e0e0e0; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .filter-chip.active { background: #2196F3; color: white; border-color: #2196F3; }
+    
+    .record-actions .btn { padding: 6px 10px; font-size: 12px; }
+    
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 200; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: white; border-radius: 12px; padding: 24px; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .modal-title { font-size: 18px; font-weight: 500; }
+    .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
+    
+    .date-display { text-align: center; padding: 12px; background: #f5f5f5; border-radius: 8px; margin-bottom: 16px; }
+    .date-display .date { font-size: 24px; font-weight: 500; }
+    .date-display .weekday { font-size: 14px; color: #666; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 今日进度 -->
+<div class="today-stats">
+    <h3>今日工时</h3>
+    <div><span class="value" id="todayHours">0</span><span class="unit">小时</span></div>
+    <div class="today-progress">
+        <div class="today-progress-bar" id="progressBar" style="width: 0%"></div>
+    </div>
+</div>
+
+<!-- 快捷记工 -->
+<div class="quick-add">
+    <button class="quick-btn standard" onclick="quickAdd('standard')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        标准工
+    </button>
+    <button class="quick-btn manual" onclick="quickAdd('manual')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+        手动记工
+    </button>
+    <button class="quick-btn overtime" onclick="quickAdd('overtime')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm1-8h2v2h-2zm0 4h2v6h-2z"/></svg>
+        加班
+    </button>
+</div>
+
+<!-- 添加记录表单 -->
+<div class="card add-form" id="addForm" style="display: none;">
+    <div class="card-title">添加记工记录</div>
+    <form id="recordForm">
+        <input type="hidden" id="recordType" name="record_type" value="standard">
+        
+        <div class="form-group">
+            <label class="form-label">日期</label>
+            <input type="date" name="work_date" class="form-input" id="workDate" required>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">地点</label>
+            <input type="text" name="location" class="form-input" id="location" placeholder="请输入工作地点" required>
+        </div>
+        
+        <div class="form-row" id="timeRow" style="display: none;">
+            <div class="form-group">
+                <label class="form-label">开始时间</label>
+                <input type="time" name="start_time" class="form-input" id="startTime">
+            </div>
+            <div class="form-group">
+                <label class="form-label">结束时间</label>
+                <input type="time" name="end_time" class="form-input" id="endTime">
+            </div>
+        </div>
+        
+        <div class="form-group" id="hoursGroup">
+            <label class="form-label">工时（小时）</label>
+            <input type="number" name="hours" class="form-input" id="hours" step="0.5" min="0" value="8">
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">备注</label>
+            <input type="text" name="remark" class="form-input" id="remark" placeholder="可选">
+        </div>
+        
+        <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" name="meal_subsidy" id="mealSubsidy" value="1">
+                <span>包含饭补</span>
+            </label>
+        </div>
+        
+        <button type="submit" class="btn btn-primary btn-block">保存</button>
+        <button type="button" class="btn btn-outline btn-block" onclick="hideForm()" style="margin-top: 8px;">取消</button>
+    </form>
+</div>
+
+<!-- 记录列表 -->
+<div class="records-section">
+    <div class="section-header">
+        <span class="section-title">记工记录</span>
+    </div>
+    
+    <div class="filter-bar">
+        <span class="filter-chip active" data-filter="all">全部</span>
+        <span class="filter-chip" data-filter="standard">标准工</span>
+        <span class="filter-chip" data-filter="manual">手动</span>
+        <span class="filter-chip" data-filter="overtime">加班</span>
+    </div>
+    
+    <div class="card" id="recordsList">
+        <div class="loading">加载中...</div>
+    </div>
+</div>
+
+<!-- 确认对话框 -->
+<div class="modal-overlay" id="confirmModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">确认</span>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <p id="confirmMessage"></p>
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button class="btn btn-outline" onclick="closeModal()" style="flex: 1;">取消</button>
+            <button class="btn btn-primary" id="confirmBtn" style="flex: 1;">确定</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+let currentFilter = 'all';
+let settings = { daily_hours: 8 };
+
+// 初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 设置默认日期为今天
+    document.getElementById('workDate').value = new Date().toISOString().split('T')[0];
+    
+    // 加载设置
+    loadSettings();
+    
+    // 加载记录
+    loadRecords();
+});
+
+// 加载设置
+async function loadSettings() {
+    try {
+        const res = await fetch('/api/settings');
+        const json = await res.json();
+        if (json.success && json.data) {
+            settings.daily_hours = parseFloat(json.data.daily_hours || 8);
+            updateTodayProgress();
+        }
+    } catch (e) {
+        console.error('加载设置失败', e);
+    }
+}
+
+// 更新今日进度
+function updateTodayProgress() {
+    const today = new Date().toISOString().split('T')[0];
+    // 将在loadRecords中更新
+}
+
+// 加载记录
+async function loadRecords() {
+    const list = document.getElementById('recordsList');
+    try {
+        const res = await fetch('/api/records?limit=100');
+        const json = await res.json();
+        
+        if (!json.success) {
+            list.innerHTML = '<div class="empty-state">加载失败</div>';
+            return;
+        }
+        
+        let records = json.data || [];
+        
+        // 过滤
+        if (currentFilter !== 'all') {
+            records = records.filter(r => r.record_type === currentFilter);
+        }
+        
+        if (records.length === 0) {
+            list.innerHTML = '<div class="empty-state">暂无记录<br><br><button class="btn btn-primary" onclick="quickAdd(\'standard\')">开始记工</button></div>';
+            return;
+        }
+        
+        let html = '';
+        let todayHours = 0;
+        const today = new Date().toISOString().split('T')[0];
+        
+        records.forEach(record => {
+            const date = record.work_date;
+            const typeLabel = { standard: '标准工', manual: '手动', overtime: '加班' };
+            const hours = parseFloat(record.hours || 0);
+            
+            if (date === today) {
+                todayHours += hours;
+            }
+            
+            html += `
+                <div class="record-item">
+                    <div class="record-date">${date.slice(5)}</div>
+                    <span class="record-type ${record.record_type}">${typeLabel[record.record_type] || '记工'}</span>
+                    <div class="record-info">
+                        <div class="record-location">${record.location || '未填写'}</div>
+                        <div class="record-hours">${hours}小时${record.remark ? ' · ' + record.remark : ''}</div>
+                    </div>
+                    <div class="record-actions">
+                        <button class="btn btn-outline" onclick="deleteRecord(${record.id})">删除</button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        list.innerHTML = html;
+        
+        // 更新今日工时
+        document.getElementById('todayHours').textContent = todayHours;
+        const progress = Math.min(100, (todayHours / settings.daily_hours) * 100);
+        document.getElementById('progressBar').style.width = progress + '%';
+        
+    } catch (e) {
+        list.innerHTML = '<div class="empty-state">加载失败</div>';
+    }
+}
+
+// 快捷添加
+function quickAdd(type) {
+    document.getElementById('recordType').value = type;
+    document.getElementById('addForm').style.display = 'block';
+    
+    const timeRow = document.getElementById('timeRow');
+    const hoursGroup = document.getElementById('hoursGroup');
+    
+    if (type === 'manual') {
+        timeRow.style.display = 'flex';
+        hoursGroup.style.display = 'block';
+        document.getElementById('hours').value = '8';
+    } else if (type === 'overtime') {
+        timeRow.style.display = 'none';
+        hoursGroup.style.display = 'block';
+        document.getElementById('hours').value = '2';
+    } else {
+        timeRow.style.display = 'none';
+        hoursGroup.style.display = 'none';
+    }
+    
+    document.getElementById('workDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('location').value = '';
+    document.getElementById('remark').value = '';
+    document.getElementById('mealSubsidy').checked = false;
+}
+
+function hideForm() {
+    document.getElementById('addForm').style.display = 'none';
+}
+
+// 提交表单
+document.getElementById('recordForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = {
+        record_type: formData.get('record_type'),
+        work_date: formData.get('work_date'),
+        location: formData.get('location'),
+        start_time: formData.get('start_time') || null,
+        end_time: formData.get('end_time') || null,
+        hours: parseFloat(formData.get('hours')) || 8,
+        remark: formData.get('remark') || '',
+        meal_subsidy: formData.get('meal_subsidy') ? 1 : 0
+    };
+    
+    try {
+        const res = await fetch('/api/records', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        const json = await res.json();
+        
+        if (json.success) {
+            hideForm();
+            loadRecords();
+        } else if (json.duplicate) {
+            showConfirm('检测到该日期已有记工记录，是否继续添加？', async () => {
+                data.force_add = true;
+                await fetch('/api/records', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                hideForm();
+                loadRecords();
+            });
+        } else {
+            alert(json.message || '添加失败');
+        }
+    } catch (e) {
+        alert('网络错误');
+    }
+});
+
+// 删除记录
+async function deleteRecord(id) {
+    showConfirm('确定要删除这条记录吗？', async () => {
+        try {
+            await fetch(`/api/records/${id}`, { method: 'DELETE' });
+            loadRecords();
+        } catch (e) {
+            alert('删除失败');
+        }
+    });
+}
+
+// 确认对话框
+function showConfirm(message, onConfirm) {
+    document.getElementById('confirmMessage').textContent = message;
+    document.getElementById('confirmModal').classList.add('show');
+    document.getElementById('confirmBtn').onclick = function() {
+        closeModal();
+        onConfirm();
+    };
+}
+
+function closeModal() {
+    document.getElementById('confirmModal').classList.remove('show');
+}
+
+// 过滤
+document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        this.classList.add('active');
+        currentFilter = this.dataset.filter;
+        loadRecords();
+    });
+});
+{% endblock %}

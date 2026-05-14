@@ -12,7 +12,7 @@ android {
         applicationId "com.worklogger.app"
         minSdk 26
         targetSdk 34
-        versionCode 2196
+        versionCode 2198
         versionName "2.1.9.8"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

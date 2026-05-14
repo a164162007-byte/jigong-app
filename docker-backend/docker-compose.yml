@@ -19,7 +19,7 @@ services:
       - DATABASE_PATH=/app/data/work_records.db
       - BACKUP_DIR=/app/backups
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

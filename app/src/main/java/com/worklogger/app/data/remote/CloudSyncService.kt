@@ -128,6 +128,7 @@ object CloudSyncService {
     /**
      * 登录
      * 同时支持 Cookie 和 Basic Auth 认证方式
+     * 发送JSON格式请求
      */
     suspend fun login(
         serverUrl: String,
@@ -139,24 +140,28 @@ object CloudSyncService {
                 cookieJar.clear()
 
                 val url = buildUrl(serverUrl, "login")
-                val formBody = FormBody.Builder()
-                    .add("username", username)
-                    .add("password", password)
-                    .build()
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val jsonBody = gson.toJson(mapOf("username" to username, "password" to password))
+                val body = RequestBody.create(mediaType, jsonBody)
 
                 val request = Request.Builder()
                     .url(url)
-                    .post(formBody)
+                    .post(body)
                     .build()
 
                 val response = client.newCall(request).execute()
                 
-                val body = response.body?.string() ?: ""
+                val bodyString = response.body?.string() ?: ""
                 
-                if (response.isSuccessful || response.code == 200 || body.contains("success")) {
+                // 解析JSON响应
+                val rootType = object : TypeToken<Map<String, Any>>() {}.type
+                val root = gson.fromJson<Map<String, Any>>(bodyString, rootType)
+                
+                if (root["success"] == true) {
                     Result.success(true)
                 } else {
-                    Result.failure(IOException("登录失败: HTTP ${response.code}"))
+                    val message = root["message"]?.toString() ?: "登录失败"
+                    Result.failure(IOException(message))
                 }
             } catch (e: Exception) {
                 Result.failure(e)
