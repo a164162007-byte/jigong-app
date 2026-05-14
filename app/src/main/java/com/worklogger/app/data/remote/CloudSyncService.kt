@@ -467,8 +467,13 @@ object CloudSyncService {
             else -> isOvertime to false
         }
         
-        // 饭补：如果没有明确值，标准工默认有饭补
-        val hasMealSubsidy = mealSubsidy ?: (recordType == "standard" || (!isOvertime && !isManual))
+        // 饭补：业务规则强制执行 - 加班没有饭补，标准工必须有饭补，手动折算自由选择
+        val rawMealSubsidy = mealSubsidy ?: (recordType == "standard" || (!isOvertime && !isManual))
+        val hasMealSubsidy = when {
+            isOvertime -> false
+            !isOvertime && !isManual -> true
+            else -> rawMealSubsidy
+        }
         
         return WorkRecord(
             date = date,

@@ -325,7 +325,7 @@ fun RecordDetailItemWithActions(
                     if (record.isOvertime) "加班" else if (record.isManual) "手动折算" else "标准工",
                     record.location.takeIf { it.isNotEmpty() },
                     record.remark.takeIf { it.isNotEmpty() },
-                    if (record.mealSubsidy) "🍱饭补" else null
+                    if (record.mealSubsidy && !record.isOvertime) "🍱饭补" else null
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

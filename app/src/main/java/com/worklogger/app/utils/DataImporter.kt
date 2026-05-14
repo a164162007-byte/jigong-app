@@ -262,10 +262,16 @@ class DataImporter(private val context: Context) {
         val isManual = recordType == "manual"
         
         // 解析meal_subsidy（没有则默认标准工有饭补）
-        val mealSubsidy = when (val v = rawRecord["meal_subsidy"]) {
+        // 业务规则强制执行：加班没有饭补，标准工必须有饭补，手动折算可自由选择
+        val rawMealSubsidy = when (val v = rawRecord["meal_subsidy"]) {
             is Boolean -> v
             is String -> v.toBoolean()
             else -> recordType == "standard"
+        }
+        val mealSubsidy = when {
+            isOvertime -> false                    // 加班没有饭补
+            !isOvertime && !isManual -> true       // 标准工必须有饭补
+            else -> rawMealSubsidy                 // 手动折算自由选择
         }
         
         // 解析时间戳

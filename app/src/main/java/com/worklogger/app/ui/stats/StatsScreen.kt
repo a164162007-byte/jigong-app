@@ -840,9 +840,9 @@ private fun RecordDetailItem(record: com.worklogger.app.model.WorkRecord) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = if (record.mealSubsidy) "有饭补" else "无饭补",
+                text = if (record.mealSubsidy && !record.isOvertime) "有饭补" else "无饭补",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (record.mealSubsidy) Success else MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (record.mealSubsidy && !record.isOvertime) Success else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         
@@ -899,7 +899,7 @@ private fun RecordDetailItemWithActions(
         Spacer(modifier = Modifier.height(4.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(text = if (record.location.isNotEmpty()) record.location else "未填写工地", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(text = if (record.mealSubsidy) "有饭补" else "无饭补", style = MaterialTheme.typography.bodySmall, color = if (record.mealSubsidy) Success else MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(text = if (record.mealSubsidy && !record.isOvertime) "有饭补" else "无饭补", style = MaterialTheme.typography.bodySmall, color = if (record.mealSubsidy && !record.isOvertime) Success else MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (record.remark.isNotEmpty()) {
             Spacer(modifier = Modifier.height(2.dp))

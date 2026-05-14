@@ -183,4 +183,24 @@ class WorkRepository(
     suspend fun updatePhrase(phrase: QuickPhrase, newText: String) {
         quickPhraseDao.updatePhrase(phrase.copy(phrase = newText))
     }
+
+    /**
+     * 修复历史数据：加班记录mealSubsidy应为false，标准工记录mealSubsidy应为true
+     */
+    suspend fun fixMealSubsidyData(): Int {
+        val allRecords = workRecordDao.getAllRecordsOnce()
+        var fixedCount = 0
+        for (record in allRecords) {
+            val correctMealSubsidy = when {
+                record.isOvertime -> false
+                !record.isOvertime && !record.isManual -> true
+                else -> record.mealSubsidy
+            }
+            if (record.mealSubsidy != correctMealSubsidy) {
+                workRecordDao.update(record.copy(mealSubsidy = correctMealSubsidy, updatedAt = System.currentTimeMillis()))
+                fixedCount++
+            }
+        }
+        return fixedCount
+    }
 }

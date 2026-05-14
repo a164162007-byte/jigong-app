@@ -91,6 +91,9 @@ class MainActivity : ComponentActivity() {
             }
         }
         
+        // 修复旧数据中加班饭补不一致的问题
+        lifecycleScope.launch(Dispatchers.IO) { (application as WorkLoggerApp).workRepository.fixMealSubsidyData() }
+
         setContent {
             val settings by app.settingsRepository.settings.collectAsStateWithLifecycle(
                 initialValue = com.worklogger.app.model.UserSettings()

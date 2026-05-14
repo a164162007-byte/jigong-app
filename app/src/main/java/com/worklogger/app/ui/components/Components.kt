@@ -128,7 +128,7 @@ fun WorkRecordCard(
                         )
                     }
                     
-                    if (record.mealSubsidy) {
+                    if (record.mealSubsidy && !record.isOvertime) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "🍱",

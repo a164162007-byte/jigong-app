@@ -137,10 +137,17 @@ class ExcelExporter(private val context: Context) {
                         val typeStr = row.getCell(2)?.stringCellValue ?: "标准工"
                         val location = row.getCell(3)?.stringCellValue ?: ""
                         val remark = row.getCell(4)?.stringCellValue ?: ""
-                        val mealSubsidy = row.getCell(5)?.stringCellValue == "是"
+                        val rawMealSubsidy = row.getCell(5)?.stringCellValue == "是"
                         
                         val isOvertime = typeStr.contains("加班")
                         val isManual = typeStr.contains("手动")
+                        
+                        // 业务规则强制执行：加班没有饭补，标准工必须有饭补，手动折算自由选择
+                        val mealSubsidy = when {
+                            isOvertime -> false
+                            !isOvertime && !isManual -> true
+                            else -> rawMealSubsidy
+                        }
                         
                         records.add(
                             WorkRecord(
