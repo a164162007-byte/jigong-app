@@ -18,7 +18,7 @@
 版本: 1.19.0
 """
 
-VERSION = 'v2.1.9.9'
+VERSION = 'v2.1.10.0'
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import os
@@ -427,7 +427,16 @@ def api_add_record():
     force_add = data.get('force_add', False)
     auto_split_overtime = data.get('auto_split_overtime', False)
     remark = data.get('remark', '')
-    meal_subsidy = float(data.get('meal_subsidy', 0)) if data.get('meal_subsidy') else 0
+    raw_meal_subsidy = float(data.get('meal_subsidy', 0)) if data.get('meal_subsidy') else 0
+    # 业务规则强制执行：加班没有饭补，标准工必须有饭补，手动折算自由选择
+    settings = get_all_settings(session['user_id'])
+    meal_subsidy_standard = float(settings.get('meal_subsidy', 30))
+    if record_type == 'overtime':
+        meal_subsidy = 0
+    elif record_type == 'standard':
+        meal_subsidy = meal_subsidy_standard
+    else:
+        meal_subsidy = raw_meal_subsidy
     
     if not all([record_type, work_date, location]):
         return jsonify({'success': False, 'message': '缺少必填字段'})
@@ -446,7 +455,6 @@ def api_add_record():
     try:
         # 自动拆分加班：标准工或手动折算超过标准工时时，自动拆分为标准工+加班
         if auto_split_overtime and record_type in ('manual', 'standard') and hours:
-            settings = get_all_settings(session['user_id'])
             daily_hours = float(settings.get('daily_hours', 9))
             
             if float(hours) > daily_hours:
@@ -539,6 +547,17 @@ def api_update_record(record_id):
     """
     data = request.get_json()
     
+    # 业务规则强制执行：加班没有饭补，标准工必须有饭补，手动折算自由选择
+    raw_meal_subsidy = float(data.get('meal_subsidy', 0)) if data.get('meal_subsidy') else None
+    record_type = data.get('record_type', '')
+    if record_type == 'overtime':
+        final_meal_subsidy = 0
+    elif record_type == 'standard':
+        upd_settings = get_all_settings(session['user_id'])
+        final_meal_subsidy = float(upd_settings.get('meal_subsidy', 30))
+    else:
+        final_meal_subsidy = raw_meal_subsidy
+    
     try:
         update_work_record(
             user_id=session['user_id'],
@@ -552,7 +571,7 @@ def api_update_record(record_id):
             afternoon_start_time=data.get('afternoon_start_time'),
             hours=data.get('hours'),
             remark=data.get('remark', ''),
-            meal_subsidy=float(data.get('meal_subsidy', 0)) if data.get('meal_subsidy') else None
+            meal_subsidy=final_meal_subsidy
         )
         return jsonify({'success': True, 'message': '记录更新成功'})
     except Exception as e:
