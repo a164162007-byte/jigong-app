@@ -1,7 +1,9 @@
 package com.worklogger.app
 
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
@@ -15,6 +17,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -110,12 +113,22 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         // 取消所有协程，防止内存泄漏
         activityJob.cancel()
+        // 立即杀掉进程，释放内存，避免后台驻留
+        android.os.Process.killProcess(android.os.Process.myPid())
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(app: WorkLoggerApp) {
+    // 返回键退出应用并立即销毁进程
+    val backPressedState = remember { mutableStateOf(true) }
+    BackHandler(enabled = backPressedState.value) {
+        (app as? android.app.Activity)?.let { activity ->
+            activity.finishAndRemoveTask()
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }
+    }
     val navController = rememberNavController()
     val screens = listOf(Screen.Home, Screen.Stats, Screen.Calendar, Screen.Settings)
     

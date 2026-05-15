@@ -26,7 +26,6 @@ class SettingsDataStore(private val context: Context) {
         private val OFF_WORK_REMINDER = booleanPreferencesKey("off_work_reminder")
         private val MISSED_DAY_REMINDER = booleanPreferencesKey("missed_day_reminder")
         private val THEME = stringPreferencesKey("theme")
-        private val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
         // 云同步配置键
         private val CLOUD_SYNC_ENABLED = booleanPreferencesKey("cloud_sync_enabled")
         private val CLOUD_SERVER_URL = stringPreferencesKey("cloud_server_url")
@@ -49,7 +48,6 @@ class SettingsDataStore(private val context: Context) {
             offWorkReminder = preferences[OFF_WORK_REMINDER] ?: true,
             missedDayReminder = preferences[MISSED_DAY_REMINDER] ?: true,
             theme = preferences[THEME] ?: "system",
-            biometricEnabled = preferences[BIOMETRIC_ENABLED] ?: false,
             // 云同步配置
             cloudSyncEnabled = preferences[CLOUD_SYNC_ENABLED] ?: false,
             cloudServerUrl = preferences[CLOUD_SERVER_URL] ?: "",
@@ -73,7 +71,6 @@ class SettingsDataStore(private val context: Context) {
             preferences[OFF_WORK_REMINDER] = settings.offWorkReminder
             preferences[MISSED_DAY_REMINDER] = settings.missedDayReminder
             preferences[THEME] = settings.theme
-            preferences[BIOMETRIC_ENABLED] = settings.biometricEnabled
             // 云同步配置
             preferences[CLOUD_SYNC_ENABLED] = settings.cloudSyncEnabled
             preferences[CLOUD_SERVER_URL] = settings.cloudServerUrl
@@ -123,10 +120,6 @@ class SettingsDataStore(private val context: Context) {
     
     suspend fun updateTheme(theme: String) {
         context.dataStore.edit { it[THEME] = theme }
-    }
-    
-    suspend fun updateBiometricEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[BIOMETRIC_ENABLED] = enabled }
     }
     
     // 云同步配置方法

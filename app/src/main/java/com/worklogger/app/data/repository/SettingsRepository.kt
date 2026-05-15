@@ -36,9 +36,6 @@ class SettingsRepository(private val settingsDataStore: SettingsDataStore) {
     
     suspend fun updateTheme(theme: String) = settingsDataStore.updateTheme(theme)
     
-    suspend fun updateBiometricEnabled(enabled: Boolean) = 
-        settingsDataStore.updateBiometricEnabled(enabled)
-    
     // 云同步配置方法
     suspend fun updateCloudSyncEnabled(enabled: Boolean) = 
         settingsDataStore.updateCloudSyncEnabled(enabled)

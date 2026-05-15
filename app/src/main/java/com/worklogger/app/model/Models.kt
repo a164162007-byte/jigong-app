@@ -52,7 +52,6 @@ data class UserSettings(
     val offWorkReminder: Boolean = true,   // 下班提醒开关
     val missedDayReminder: Boolean = true, // 漏记提醒开关
     val theme: String = "system",         // system/light/dark
-    val biometricEnabled: Boolean = false, // 生物识别开关
     // 云同步配置
     val cloudSyncEnabled: Boolean = false,  // 云同步开关
     val cloudServerUrl: String = "",        // 云服务器地址（用户自行配置）

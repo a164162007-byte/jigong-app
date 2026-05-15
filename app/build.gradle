@@ -12,8 +12,8 @@ android {
         applicationId "com.worklogger.app"
         minSdk 26
         targetSdk 34
-        versionCode 2197
-        versionName "2.1.9.9"
+        versionCode 2198
+        versionName "2.1.9.10"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -85,7 +85,6 @@ dependencies {
     implementation 'androidx.datastore:datastore-preferences:1.0.0'
 
     // Biometric
-    implementation 'androidx.biometric:biometric:1.1.0'
 
     // WorkManager for scheduled tasks
     implementation 'androidx.work:work-runtime-ktx:2.9.0'
