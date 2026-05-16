@@ -298,7 +298,8 @@ fun SettingsScreen(
                 onUsernameChange = { viewModel.updateCloudUsername(it) },
                 onPasswordChange = { viewModel.updateCloudPassword(it) },
                 onDismiss = { viewModel.hideCloudConfigDialog() },
-                onSave = { viewModel.saveCloudConfig() }
+                onSave = { viewModel.saveCloudConfig() },
+                onRegister = { viewModel.registerToCloud() }
             )
         }
         
