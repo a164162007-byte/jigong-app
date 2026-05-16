@@ -169,6 +169,51 @@ object CloudSyncService {
         }
     }
 
+
+    /**
+     * 注册
+     * 发送JSON格式请求到 /register
+     */
+    suspend fun register(
+        serverUrl: String,
+        username: String,
+        password: String
+    ): Result<Boolean> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val url = buildUrl(serverUrl, "register")
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val jsonBody = gson.toJson(mapOf(
+                    "username" to username,
+                    "password" to password,
+                    "confirm_password" to password
+                ))
+                val body = RequestBody.create(mediaType, jsonBody)
+
+                val request = Request.Builder()
+                    .url(url)
+                    .post(body)
+                    .build()
+
+                val response = client.newCall(request).execute()
+                
+                val bodyString = response.body?.string() ?: ""
+                
+                val rootType = object : TypeToken<Map<String, Any>>() {}.type
+                val root = gson.fromJson<Map<String, Any>>(bodyString, rootType)
+                
+                if (root["success"] == true) {
+                    Result.success(true)
+                } else {
+                    val message = root["message"]?.toString() ?: "注册失败"
+                    Result.failure(IOException(message))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
     /**
      * 获取云端记录列表
      * 使用 Basic Auth 认证，兼容 Web 端返回格式

@@ -88,6 +88,20 @@
         </div>
         <span class="system-arrow">&gt;</span>
     </div>
+    <div class="system-item" onclick="document.getElementById('importFile').click()">
+        <div class="system-info">
+            <div class="system-icon green">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+            </div>
+            <div>
+                <div class="system-label">导入数据</div>
+                <div class="system-desc">从JSON或Excel文件导入</div>
+            </div>
+        </div>
+        <span class="system-arrow">&gt;</span>
+    </div>
+    <input type="file" id="importFile" accept=".json,.xlsx,.xls" style="display:none" onchange="importData(this)">
+    
     <div class="system-item" onclick="showTrash()">
         <div class="system-info">
             <div class="system-icon orange">
@@ -105,6 +119,20 @@
 <!-- 危险操作 -->
 <div class="card">
     <div class="card-title">危险操作</div>
+    <div class="system-item" onclick="document.getElementById('updateFile').click()">
+        <div class="system-info">
+            <div class="system-icon orange">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M21 10.12h-6.78l2.74-2.82-2.2-2.2L7 12l5.56 5.56 2.2-2.2L12.4 13H21v-2.88z"/></svg>
+            </div>
+            <div>
+                <div class="system-label">在线更新</div>
+                <div class="system-desc">上传ZIP包更新系统</div>
+            </div>
+        </div>
+        <span class="system-arrow">&gt;</span>
+    </div>
+    <input type="file" id="updateFile" accept=".zip" style="display:none" onchange="uploadUpdate(this)">
+    
     <div class="system-item" onclick="clearAllData()">
         <div class="system-info">
             <div class="system-icon red">
@@ -122,7 +150,7 @@
 <!-- 版本信息 -->
 <div class="version-info">
     <p>记工App Web版</p>
-    <p id="versionInfo">v2.1.9.6</p>
+    <p id="versionInfo">加载中...</p>
 </div>
 
 <!-- 修改密码弹窗 -->
@@ -293,13 +321,73 @@ function showTrash() {
     window.location.href = '/trash';
 }
 
+// 获取版本信息
+fetch('/api/version').then(r => r.json()).then(data => {
+    document.getElementById('versionInfo').textContent = data.version || '未知';
+}).catch(() => {
+    document.getElementById('versionInfo').textContent = '获取失败';
+});
+
+// 导入数据
+async function importData(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const res = await fetch('/api/import', {
+            method: 'POST',
+            body: formData
+        });
+        const json = await res.json();
+        alert(json.success ? (json.message || '导入成功') : (json.message || '导入失败'));
+        if (json.success) window.location.reload();
+    } catch (e) {
+        alert('导入失败：网络错误');
+    }
+    input.value = '';
+}
+
+// 在线更新
+async function uploadUpdate(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    if (!confirm('确定要上传更新包吗？更新后将自动重启。')) {
+        input.value = '';
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const res = await fetch('/api/update', {
+            method: 'POST',
+            body: formData
+        });
+        const json = await res.json();
+        if (json.success) {
+            alert('更新成功，系统将自动重启...');
+            setTimeout(() => window.location.reload(), 5000);
+        } else {
+            alert(json.message || '更新失败');
+        }
+    } catch (e) {
+        alert('更新失败：网络错误');
+    }
+    input.value = '';
+}
+
 // 清空数据
 async function clearAllData() {
     if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) return;
     if (!confirm('再次确认：删除后数据将无法恢复！')) return;
     
     try {
-        const res = await fetch('/api/clear', { method: 'DELETE' });
+        const res = await fetch('/api/clear', { method: 'POST' });
         const json = await res.json();
         
         alert(json.success ? '数据已清空' : '操作失败');

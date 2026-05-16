@@ -352,6 +352,50 @@ class SettingsViewModel(
         }
     }
     
+
+    /**
+     * 注册云端账号
+     */
+    fun registerToCloud() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val serverUrl = state.cloudServerUrlInput
+            val username = state.cloudUsernameInput
+            val password = state.cloudPasswordInput
+            
+            if (serverUrl.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请输入服务器地址") }
+                return@launch
+            }
+            
+            if (username.isBlank() || password.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请输入用户名和密码") }
+                return@launch
+            }
+            
+            if (password.length < 4) {
+                _uiState.update { it.copy(syncResult = "密码长度至少4位") }
+                return@launch
+            }
+            
+            _uiState.update { it.copy(syncResult = "正在注册...") }
+            
+            val connectionResult = cloudSyncService.testConnection(serverUrl)
+            if (!connectionResult.getOrDefault(false)) {
+                _uiState.update { it.copy(syncResult = "连接失败，请检查服务器地址") }
+                return@launch
+            }
+            
+            val registerResult = cloudSyncService.register(serverUrl, username, password)
+            
+            if (registerResult.getOrDefault(false)) {
+                _uiState.update { it.copy(syncResult = "注册成功！请点击保存后测试连接") }
+            } else {
+                _uiState.update { it.copy(syncResult = "注册失败：${registerResult.exceptionOrNull()?.message ?: "未知错误"}") }
+            }
+        }
+    }
+
     /**
      * 登录到云端
      */

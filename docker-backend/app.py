@@ -18,7 +18,7 @@
 版本: 1.19.0
 """
 
-VERSION = 'v2.1.10.0'
+VERSION = 'v2.1.9.11'
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import os
@@ -1504,14 +1504,14 @@ def api_change_password():
     # 验证密码
     import hashlib
     hashed_current = hashlib.sha256((current_password + user['salt']).encode()).hexdigest()
-    if hashed_current != user['password_hash']:
+    if hashed_current != user['password']:
         return jsonify({'success': False, 'message': '当前密码错误'})
     
     # 更新密码
     new_hash = hashlib.sha256((new_password + user['salt']).encode()).hexdigest()
     conn = models.get_db()
     cursor = conn.cursor()
-    cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_hash, session['user_id']))
+    cursor.execute('UPDATE users SET password = ? WHERE id = ?', (new_hash, session['user_id']))
     conn.commit()
     conn.close()
     
@@ -1550,9 +1550,9 @@ def api_admin_reset_password():
     
     data = request.get_json()
     user_id = data.get('user_id')
-    new_password = data.get('new_password')
+    new_password = data.get('new_password', '123456')
     
-    if not user_id or not new_password:
+    if not user_id:
         return jsonify({'success': False, 'message': '参数不完整'})
     
     if len(new_password) < 4:

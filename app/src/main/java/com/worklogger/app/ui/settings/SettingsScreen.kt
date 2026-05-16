@@ -547,7 +547,8 @@ fun CloudConfigDialog(
     onUsernameChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onDismiss: () -> Unit,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    onRegister: () -> Unit
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
     
@@ -604,6 +605,11 @@ fun CloudConfigDialog(
             }
         },
         dismissButton = {
+            TextButton(onClick = onRegister,
+                enabled = serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank()
+            ) {
+                Text("注册新账号")
+            }
             TextButton(onClick = onDismiss) {
                 Text("取消")
             }

@@ -400,7 +400,7 @@ def get_user_by_id(user_id):
     """
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT id, username, created_at FROM users WHERE id = ?', (user_id,))
+    cursor.execute('SELECT id, username, password, salt, created_at FROM users WHERE id = ?', (user_id,))
     user = cursor.fetchone()
     conn.close()
     return dict_from_row(user)
