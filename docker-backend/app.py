@@ -18,7 +18,7 @@
 版本: 1.19.0
 """
 
-VERSION = 'v2.1.9.11'
+VERSION = 'v2.1.9.12'
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import os
@@ -1329,36 +1329,57 @@ def api_get_yearly_report(year):
 @login_required
 def api_import_data():
     """
-    导入Excel数据或JSON批量数据
+    导入数据
     
-    支持两种格式:
-    1. multipart/form-data: 上传Excel文件
-    2. application/json: JSON批量导入 {"records": [...]}
+    支持三种格式:
+    1. application/json: JSON批量导入 {"records": [...]}（供App云同步使用）
+    2. multipart/form-data + JSON文件: 上传.json文件
+    3. multipart/form-data + Excel文件: 上传.xlsx/.xls文件
     """
     try:
-        # 检查是否是JSON请求
-        if request.is_json:
-            # JSON批量导入（供App云同步使用）
-            data = request.get_json()
-            records = data.get('records', [])
-            
-            if not records:
-                return jsonify({'success': False, 'message': '没有要导入的记录'})
-            
+        # 获取用户设置（用于饭补金额和标准工时）
+        user_settings = get_all_settings(session['user_id'])
+        meal_subsidy_amount = float(user_settings.get('meal_subsidy', 30))
+        daily_hours = float(user_settings.get('daily_hours', 9))
+        
+        # 辅助函数：强制执行饭补业务规则
+        def enforce_meal_subsidy(record_type, raw_meal_subsidy):
+            """业务规则：标准工必须有饭补，加班没有饭补，手动折算自由选择"""
+            if record_type == 'overtime':
+                return 0  # 加班没有饭补
+            elif record_type == 'standard':
+                return meal_subsidy_amount  # 标准工必须有饭补
+            else:  # manual
+                # 手动折算：如果传了True/有值则给饭补，否则不给
+                if isinstance(raw_meal_subsidy, bool):
+                    return meal_subsidy_amount if raw_meal_subsidy else 0
+                elif isinstance(raw_meal_subsidy, (int, float)):
+                    return meal_subsidy_amount if raw_meal_subsidy > 0 else 0
+                else:
+                    return meal_subsidy_amount  # 默认有饭补
+        
+        # 辅助函数：处理记录列表
+        def process_records(records):
             imported = 0
             duplicates = 0
-            
             for record in records:
-                work_date = record.get('work_date')
+                work_date = record.get('work_date') or record.get('date')
                 record_type = record.get('record_type', 'standard')
                 location = record.get('location', '')
-                hours = float(record.get('hours', 8))
+                hours = float(record.get('hours', 8) or 8)
+                raw_meal_subsidy = record.get('meal_subsidy', 0)
+                
+                if not work_date:
+                    continue
                 
                 # 检查是否重复
                 duplicate = check_duplicate_record(session['user_id'], work_date, record_type)
                 if duplicate['has_duplicate']:
                     duplicates += 1
                     continue
+                
+                # 强制执行饭补业务规则
+                final_meal_subsidy = enforce_meal_subsidy(record_type, raw_meal_subsidy)
                 
                 # 添加记录
                 add_work_record(
@@ -1372,30 +1393,67 @@ def api_import_data():
                     afternoon_start_time=record.get('afternoon_start_time'),
                     hours=hours,
                     remark=record.get('remark', ''),
-                    meal_subsidy=float(record.get('meal_subsidy', 0)) if record.get('meal_subsidy') else 0
+                    meal_subsidy=final_meal_subsidy
                 )
                 imported += 1
-            
+            return imported, duplicates
+        
+        # 方式1: JSON请求体（App云同步使用）
+        if request.is_json:
+            data = request.get_json()
+            records = data.get('records', [])
+            if not records:
+                return jsonify({'success': False, 'message': '没有要导入的记录'})
+            imported, duplicates = process_records(records)
             return jsonify({
                 'success': True,
-                'data': {
-                    'success_count': imported,
-                    'error_count': duplicates
-                },
+                'data': {'success_count': imported, 'error_count': duplicates},
                 'message': f'成功导入 {imported} 条记录，跳过 {duplicates} 条重复记录'
             })
         
-        # Excel文件导入（原功能）
-        from openpyxl import load_workbook
-        
+        # 方式2/3: FormData文件上传
         if 'file' not in request.files:
             return jsonify({'success': False, 'message': '请选择文件'})
         
         file = request.files['file']
-        if not file.filename.endswith(('.xlsx', '.xls')):
-            return jsonify({'success': False, 'message': '请上传Excel文件'})
+        filename = file.filename or ''
+        
+        # JSON文件导入
+        if filename.endswith('.json'):
+            try:
+                json_str = file.read().decode('utf-8')
+                import json as json_module
+                data = json_module.loads(json_str)
+                
+                # 兼容多种JSON格式
+                records = None
+                if isinstance(data, list):
+                    records = data
+                elif isinstance(data, dict):
+                    # 尝试多种格式
+                    if 'records' in data:
+                        records = data['records']
+                    elif 'data' in data and isinstance(data['data'], dict) and 'records' in data['data']:
+                        records = data['data']['records']
+                
+                if not records:
+                    return jsonify({'success': False, 'message': 'JSON文件中未找到记录数据'})
+                
+                imported, duplicates = process_records(records)
+                return jsonify({
+                    'success': True,
+                    'data': {'success_count': imported, 'error_count': duplicates},
+                    'message': f'成功导入 {imported} 条记录，跳过 {duplicates} 条重复记录'
+                })
+            except Exception as e:
+                return jsonify({'success': False, 'message': f'JSON解析失败：{str(e)}'})
+        
+        # Excel文件导入
+        if not filename.endswith(('.xlsx', '.xls')):
+            return jsonify({'success': False, 'message': '请上传JSON或Excel文件(.json/.xlsx/.xls)'})
         
         # 读取Excel
+        from openpyxl import load_workbook
         wb = load_workbook(file)
         ws = wb.active
         
@@ -1404,21 +1462,22 @@ def api_import_data():
             if not row[0]:
                 continue
             records.append({
-                'record_type': row[1] if len(row) > 1 else 'manual',
+                'record_type': row[1] if len(row) > 1 else 'standard',
                 'work_date': str(row[0])[:10] if row[0] else '',
                 'location': row[2] if len(row) > 2 else '',
                 'start_time': row[3] if len(row) > 3 else None,
                 'end_time': row[4] if len(row) > 4 else None,
-                'hours': float(row[5]) if len(row) > 5 and row[5] else 8
+                'hours': float(row[5]) if len(row) > 5 and row[5] else 8,
+                'meal_subsidy': row[6] if len(row) > 6 else 0
             })
         
-        # 导入数据
-        result = import_work_records(session['user_id'], records)
+        # 使用统一的process_records处理（自动执行饭补业务规则）
+        imported, duplicates = process_records(records)
         
         return jsonify({
             'success': True,
-            'message': f'成功导入 {result["success_count"]} 条记录',
-            'data': result
+            'data': {'success_count': imported, 'error_count': duplicates},
+            'message': f'成功导入 {imported} 条记录，跳过 {duplicates} 条重复记录'
         })
     except ImportError:
         return jsonify({'success': False, 'message': 'Excel导入功能需要安装openpyxl库'})

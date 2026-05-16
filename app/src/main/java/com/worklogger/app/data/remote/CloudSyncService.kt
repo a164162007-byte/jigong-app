@@ -321,7 +321,7 @@ object CloudSyncService {
                         },
                         "location" to (record.location.ifEmpty { "未填写" }),
                         "remark" to record.remark,
-                        "meal_subsidy" to record.mealSubsidy
+                        "meal_subsidy" to if (record.mealSubsidy) 1 else 0
                     )
                 }
 
