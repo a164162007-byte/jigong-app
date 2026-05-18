@@ -57,6 +57,9 @@ interface WorkRecordDao {
     
     @Query("DELETE FROM work_records WHERE deleted_at IS NOT NULL")
     suspend fun emptyTrash()
+    
+    @Query("DELETE FROM work_records WHERE deleted_at > 0 AND deleted_at < :timestamp")
+    suspend fun deleteOldTrashRecords(timestamp: Long)
 }
 
 @Dao

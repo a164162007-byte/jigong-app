@@ -187,6 +187,8 @@ def init_db():
             morning_end_time TEXT,
             afternoon_start_time TEXT,
             hours REAL,
+            meal_subsidy REAL DEFAULT 0,
+            remark TEXT DEFAULT '',
             deleted_at TIMESTAMP DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -207,6 +209,16 @@ def init_db():
         pass  # 字段已存在
     try:
         cursor.execute('ALTER TABLE work_records ADD COLUMN afternoon_start_time TEXT')
+    except:
+        pass  # 字段已存在
+    
+    # 为已存在的表添加 meal_subsidy 和 remark 字段
+    try:
+        cursor.execute('ALTER TABLE work_records ADD COLUMN meal_subsidy REAL DEFAULT 0')
+    except:
+        pass  # 字段已存在
+    try:
+        cursor.execute('ALTER TABLE work_records ADD COLUMN remark TEXT DEFAULT \'\'')
     except:
         pass  # 字段已存在
     
@@ -1629,7 +1641,7 @@ def import_work_records(user_id, records_data):
                 INSERT INTO work_records (user_id, record_type, work_date, location, 
                                         start_time, end_time, hours, remark, meal_subsidy)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (user_id, record_type, work_date, location, start_time, end_time, hours))
+            ''', (user_id, record_type, work_date, location, start_time, end_time, hours, remark, meal_subsidy))
             success_count += 1
             
         except Exception as e:

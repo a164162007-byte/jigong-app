@@ -18,15 +18,15 @@ class ReminderReceiver : BroadcastReceiver() {
     }
     
     override fun onReceive(context: Context, intent: Intent) {
+        val pendingResult = goAsync()
         val helper = NotificationHelper(context)
         
         when (intent.action) {
             ACTION_OFF_WORK -> {
                 helper.showOffWorkReminder()
+                pendingResult.finish()
             }
             ACTION_MISSED_DAY -> {
-                // 使用goAsync确保BroadcastReceiver在协程完成前不会终止
-                val pendingResult = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         val db = com.worklogger.app.data.local.AppDatabase.getInstance(context)
@@ -39,6 +39,7 @@ class ReminderReceiver : BroadcastReceiver() {
                     }
                 }
             }
+            else -> pendingResult.finish()
         }
     }
 }

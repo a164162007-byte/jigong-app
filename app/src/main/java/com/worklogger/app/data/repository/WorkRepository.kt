@@ -123,6 +123,10 @@ class WorkRepository(
         workRecordDao.emptyTrash()
     }
     
+    suspend fun cleanOldTrashRecords(timestamp: Long) {
+        workRecordDao.deleteOldTrashRecords(timestamp)
+    }
+    
     suspend fun softDeleteRecord(id: Long) {
         workRecordDao.moveToTrash(id)
     }

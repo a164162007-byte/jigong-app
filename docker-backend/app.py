@@ -18,7 +18,7 @@
 版本: 1.19.0
 """
 
-VERSION = '2.1.9.13'
+VERSION = '2.1.9.14'
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import os
@@ -430,14 +430,18 @@ def api_add_record():
     raw_meal_subsidy = float(data.get('meal_subsidy', 0)) if data.get('meal_subsidy') else 0
     # 业务规则强制执行：加班没有饭补，标准工必须有饭补，手动折算自由选择
     settings = get_all_settings(session['user_id'])
-    meal_subsidy_standard = float(settings.get('meal_subsidy', 30))
+    meal_subsidy_per_day = float(settings.get('meal_subsidy_per_day', settings.get('meal_subsidy', 30)))
     if record_type == 'overtime':
         meal_subsidy = 0
     elif record_type == 'standard':
-        meal_subsidy = meal_subsidy_standard
+        meal_subsidy = meal_subsidy_per_day
     else:
         # Android上传meal_subsidy=1表示有饭补，需转换为实际金额
-        meal_subsidy = meal_subsidy_standard if raw_meal_subsidy > 0 else raw_meal_subsidy
+        # 如果传入值小于标准值(1)，说明是布尔值(1)，需要替换为标准金额
+        if raw_meal_subsidy > 0 and raw_meal_subsidy < meal_subsidy_per_day:
+            meal_subsidy = meal_subsidy_per_day
+        else:
+            meal_subsidy = raw_meal_subsidy
     
     if not all([record_type, work_date, location]):
         return jsonify({'success': False, 'message': '缺少必填字段'})
@@ -1466,6 +1470,19 @@ def api_import_data():
         ws = wb.active
         
         records = []
+        # record_type 中文到英文映射
+        def convert_record_type(rt):
+            if not rt:
+                return 'standard'
+            rt = str(rt).strip()
+            if rt in ('标准工', '标准'):
+                return 'standard'
+            elif rt in ('加班', '加班工'):
+                return 'overtime'
+            elif rt in ('手动记工', '手动折算', '手动'):
+                return 'manual'
+            return 'standard'
+        
         for row in ws.iter_rows(min_row=2, values_only=True):
             if not row[0]:
                 continue
@@ -1473,7 +1490,7 @@ def api_import_data():
             records.append({
                 'work_date': str(row[0])[:10] if row[0] else '',
                 'hours': float(row[1]) if len(row) > 1 and row[1] else 8,
-                'record_type': row[2] if len(row) > 2 else 'standard',
+                'record_type': convert_record_type(row[2]) if len(row) > 2 else 'standard',
                 'location': row[3] if len(row) > 3 else '',
                 'remark': row[4] if len(row) > 4 else '',
                 'meal_subsidy': row[5] if len(row) > 5 else 0,
