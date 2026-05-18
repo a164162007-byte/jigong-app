@@ -46,7 +46,13 @@ class TrashViewModel(
         viewModelScope.launch {
             // 自动清理超过30天的已删除记录
             val thirtyDaysAgo = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30)
-            workRepository.emptyTrash()
+            // 获取当前已删除记录，过滤出超过30天的并删除
+            workRepository.trashRecords.collect { records ->
+                records.filter { it.deletedAt != null && it.deletedAt < thirtyDaysAgo }
+                    .forEach { record ->
+                        workRepository.permanentlyDeleteById(record.id)
+                    }
+            }
         }
     }
     

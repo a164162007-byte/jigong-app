@@ -155,7 +155,7 @@ class HomeViewModel(
     ) {
         viewModelScope.launch {
             // 检查工时异常
-            if (hours > 12 || (hours < 1 && hours > 0)) {
+            if (hours > 12 || hours < 1) {
                 _uiState.update { 
                     it.copy(
                         showHoursWarning = true, 

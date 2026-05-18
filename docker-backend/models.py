@@ -27,7 +27,7 @@ import sqlite3
 import os
 import hashlib
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # ============================================================================
 # 数据库配置
@@ -1617,6 +1617,8 @@ def import_work_records(user_id, records_data):
             start_time = record.get('start_time')
             end_time = record.get('end_time')
             hours = record.get('hours', 8)
+            remark = record.get('remark', '')
+            meal_subsidy = record.get('meal_subsidy', 0)
             
             if not work_date or not location:
                 error_count += 1
@@ -1625,8 +1627,8 @@ def import_work_records(user_id, records_data):
             
             cursor.execute('''
                 INSERT INTO work_records (user_id, record_type, work_date, location, 
-                                        start_time, end_time, hours)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                                        start_time, end_time, hours, remark, meal_subsidy)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (user_id, record_type, work_date, location, start_time, end_time, hours))
             success_count += 1
             

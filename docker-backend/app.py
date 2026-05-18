@@ -18,7 +18,7 @@
 版本: 1.19.0
 """
 
-VERSION = 'v2.1.9.12'
+VERSION = '2.1.9.13'
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import os
@@ -436,7 +436,8 @@ def api_add_record():
     elif record_type == 'standard':
         meal_subsidy = meal_subsidy_standard
     else:
-        meal_subsidy = raw_meal_subsidy
+        # Android上传meal_subsidy=1表示有饭补，需转换为实际金额
+        meal_subsidy = meal_subsidy_standard if raw_meal_subsidy > 0 else raw_meal_subsidy
     
     if not all([record_type, work_date, location]):
         return jsonify({'success': False, 'message': '缺少必填字段'})
@@ -454,7 +455,9 @@ def api_add_record():
     
     try:
         # 自动拆分加班：标准工或手动折算超过标准工时时，自动拆分为标准工+加班
-        if auto_split_overtime and record_type in ('manual', 'standard') and hours:
+        # 默认启用，与Android端保持一致
+        should_split = auto_split_overtime or record_type in ('manual', 'standard')
+        if should_split and record_type in ('manual', 'standard') and hours:
             daily_hours = float(settings.get('daily_hours', 9))
             
             if float(hours) > daily_hours:
@@ -556,7 +559,12 @@ def api_update_record(record_id):
         upd_settings = get_all_settings(session['user_id'])
         final_meal_subsidy = float(upd_settings.get('meal_subsidy', 30))
     else:
-        final_meal_subsidy = raw_meal_subsidy
+        # Android上传meal_subsidy=1表示有饭补，需转换为实际金额
+        if raw_meal_subsidy and raw_meal_subsidy > 0:
+            upd_settings = get_all_settings(session['user_id'])
+            final_meal_subsidy = float(upd_settings.get('meal_subsidy', 30))
+        else:
+            final_meal_subsidy = 0
     
     try:
         update_work_record(
@@ -1461,14 +1469,16 @@ def api_import_data():
         for row in ws.iter_rows(min_row=2, values_only=True):
             if not row[0]:
                 continue
+            # Android导出顺序: 日期(0)/工时(1)/类型(2)/地点(3)/备注(4)/饭补(5)/创建时间(6)
             records.append({
-                'record_type': row[1] if len(row) > 1 else 'standard',
                 'work_date': str(row[0])[:10] if row[0] else '',
-                'location': row[2] if len(row) > 2 else '',
-                'start_time': row[3] if len(row) > 3 else None,
-                'end_time': row[4] if len(row) > 4 else None,
-                'hours': float(row[5]) if len(row) > 5 and row[5] else 8,
-                'meal_subsidy': row[6] if len(row) > 6 else 0
+                'hours': float(row[1]) if len(row) > 1 and row[1] else 8,
+                'record_type': row[2] if len(row) > 2 else 'standard',
+                'location': row[3] if len(row) > 3 else '',
+                'remark': row[4] if len(row) > 4 else '',
+                'meal_subsidy': row[5] if len(row) > 5 else 0,
+                'start_time': None,
+                'end_time': None
             })
         
         # 使用统一的process_records处理（自动执行饭补业务规则）
@@ -1654,10 +1664,29 @@ def api_version():
     return jsonify({'success': True, 'version': VERSION})
 
 
+def admin_required(f):
+    """
+    管理员权限验证装饰器
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user = get_current_user()
+        if not user or not user.get('is_admin'):
+            if request.is_json or request.headers.get('Accept') == 'application/json':
+                return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 @app.route('/api/update', methods=['POST'])
 @login_required
+@admin_required
 def api_update():
-    """在线更新"""
+    """在线更新(仅管理员)"""
+    user = get_current_user()
+    if not user.get('is_admin'):
+        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
     import tempfile
     import zipfile
     import shutil

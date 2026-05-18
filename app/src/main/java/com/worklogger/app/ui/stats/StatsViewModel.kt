@@ -278,10 +278,7 @@ class StatsViewModel(
     fun confirmDelete() {
         val record = _uiState.value.deletingRecord ?: return
         viewModelScope.launch {
-            val deletedRecord = record.copy(
-                isDeleted = true, deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()
-            )
-            workRepository.update(deletedRecord)
+            workRepository.moveToTrash(record)
             hideDeleteConfirm()
             refresh()
         }

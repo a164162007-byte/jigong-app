@@ -71,8 +71,6 @@ object DateUtils {
             parseDate(date)?.let { Calendar.getInstance().apply { time = it }.get(Calendar.DAY_OF_MONTH) } ?: 0
         } catch (e: Exception) {
             0
-        } catch (e: Exception) {
-            0
         }
     }
     

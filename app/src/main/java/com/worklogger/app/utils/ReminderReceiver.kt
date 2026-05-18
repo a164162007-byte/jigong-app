@@ -25,12 +25,17 @@ class ReminderReceiver : BroadcastReceiver() {
                 helper.showOffWorkReminder()
             }
             ACTION_MISSED_DAY -> {
-                // 检查是否今天还没记工
+                // 使用goAsync确保BroadcastReceiver在协程完成前不会终止
+                val pendingResult = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
-                    val db = com.worklogger.app.data.local.AppDatabase.getInstance(context)
-                    val records = db.workRecordDao().getRecordsByDate(DateUtils.today())
-                    if (records.isEmpty()) {
-                        helper.showMissedDayReminder()
+                    try {
+                        val db = com.worklogger.app.data.local.AppDatabase.getInstance(context)
+                        val records = db.workRecordDao().getRecordsByDate(DateUtils.today())
+                        if (records.isEmpty()) {
+                            helper.showMissedDayReminder()
+                        }
+                    } finally {
+                        pendingResult.finish()
                     }
                 }
             }
