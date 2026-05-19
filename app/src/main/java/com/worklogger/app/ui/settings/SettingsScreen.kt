@@ -190,6 +190,15 @@ fun SettingsScreen(
                     enabled = !uiState.isSyncing && uiState.settings.cloudServerUrl.isNotBlank()
                 )
                 
+                // 修改密码
+                SettingsClickableItem(
+                    icon = Icons.Default.Lock,
+                    title = "修改密码",
+                    subtitle = "修改云端账户密码",
+                    onClick = { viewModel.showChangePasswordDialog() },
+                    enabled = !uiState.isSyncing && uiState.settings.cloudServerUrl.isNotBlank()
+                )
+                
                 // 从云端下载
                 SettingsClickableItem(
                     icon = Icons.Default.CloudDownload,
@@ -298,8 +307,19 @@ fun SettingsScreen(
                 onUsernameChange = { viewModel.updateCloudUsername(it) },
                 onPasswordChange = { viewModel.updateCloudPassword(it) },
                 onDismiss = { viewModel.hideCloudConfigDialog() },
-                onSave = { viewModel.saveCloudConfig() },
-                onRegister = { viewModel.registerToCloud() }
+                onSave = { viewModel.saveCloudConfig() }
+            )
+        }
+        
+        // 修改密码对话框
+        if (uiState.showChangePasswordDialog) {
+            ChangePasswordDialog(
+                currentPassword = uiState.currentPasswordInput,
+                newPassword = uiState.newPasswordInput,
+                onCurrentPasswordChange = { viewModel.updateCurrentPassword(it) },
+                onNewPasswordChange = { viewModel.updateNewPassword(it) },
+                onConfirm = { viewModel.changePassword() },
+                onDismiss = { viewModel.hideChangePasswordDialog() }
             )
         }
         
@@ -548,8 +568,7 @@ fun CloudConfigDialog(
     onUsernameChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onDismiss: () -> Unit,
-    onSave: () -> Unit,
-    onRegister: () -> Unit
+    onSave: () -> Unit
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
     
@@ -606,11 +625,83 @@ fun CloudConfigDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onRegister,
-                enabled = serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank()
-            ) {
-                Text("注册新账号")
+            TextButton(onClick = onDismiss) {
+                Text("取消")
             }
+        }
+    )
+}
+
+/**
+ * 修改密码对话框
+ */
+@Composable
+fun ChangePasswordDialog(
+    currentPassword: String,
+    newPassword: String,
+    onCurrentPasswordChange: (String) -> Unit,
+    onNewPasswordChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var currentPasswordVisible by remember { mutableStateOf(false) }
+    var newPasswordVisible by remember { mutableStateOf(false) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.Lock, contentDescription = null) },
+        title = { Text("修改密码") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OutlinedTextField(
+                    value = currentPassword,
+                    onValueChange = onCurrentPasswordChange,
+                    label = { Text("当前密码") },
+                    singleLine = true,
+                    visualTransformation = if (currentPasswordVisible) 
+                        VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { currentPasswordVisible = !currentPasswordVisible }) {
+                            Icon(
+                                imageVector = if (currentPasswordVisible) Icons.Default.VisibilityOff 
+                                             else Icons.Default.Visibility,
+                                contentDescription = if (currentPasswordVisible) "隐藏密码" else "显示密码"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                OutlinedTextField(
+                    value = newPassword,
+                    onValueChange = onNewPasswordChange,
+                    label = { Text("新密码") },
+                    singleLine = true,
+                    visualTransformation = if (newPasswordVisible) 
+                        VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { newPasswordVisible = !newPasswordVisible }) {
+                            Icon(
+                                imageVector = if (newPasswordVisible) Icons.Default.VisibilityOff 
+                                             else Icons.Default.Visibility,
+                                contentDescription = if (newPasswordVisible) "隐藏密码" else "显示密码"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = { Text("新密码长度不能少于6位") }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("确认修改")
+            }
+        },
+        dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("取消")
             }

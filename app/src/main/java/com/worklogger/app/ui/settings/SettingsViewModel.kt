@@ -42,6 +42,10 @@ data class SettingsUiState(
     val cloudUsernameInput: String = "",
     val cloudPasswordInput: String = "",
     val showCloudConfigDialog: Boolean = false,
+    // 改密码状态
+    val showChangePasswordDialog: Boolean = false,
+    val currentPasswordInput: String = "",
+    val newPasswordInput: String = "",
     // 导入状态
     val isImporting: Boolean = false,
     val importResult: String? = null,
@@ -352,50 +356,6 @@ class SettingsViewModel(
         }
     }
     
-
-    /**
-     * 注册云端账号
-     */
-    fun registerToCloud() {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val serverUrl = state.cloudServerUrlInput
-            val username = state.cloudUsernameInput
-            val password = state.cloudPasswordInput
-            
-            if (serverUrl.isBlank()) {
-                _uiState.update { it.copy(syncResult = "请输入服务器地址") }
-                return@launch
-            }
-            
-            if (username.isBlank() || password.isBlank()) {
-                _uiState.update { it.copy(syncResult = "请输入用户名和密码") }
-                return@launch
-            }
-            
-            if (password.length < 4) {
-                _uiState.update { it.copy(syncResult = "密码长度至少4位") }
-                return@launch
-            }
-            
-            _uiState.update { it.copy(syncResult = "正在注册...") }
-            
-            val connectionResult = cloudSyncService.testConnection(serverUrl)
-            if (!connectionResult.getOrDefault(false)) {
-                _uiState.update { it.copy(syncResult = "连接失败，请检查服务器地址") }
-                return@launch
-            }
-            
-            val registerResult = cloudSyncService.register(serverUrl, username, password)
-            
-            if (registerResult.getOrDefault(false)) {
-                _uiState.update { it.copy(syncResult = "注册成功！请点击保存后测试连接") }
-            } else {
-                _uiState.update { it.copy(syncResult = "注册失败：${registerResult.exceptionOrNull()?.message ?: "未知错误"}") }
-            }
-        }
-    }
-
     /**
      * 登录到云端
      */
@@ -448,6 +408,90 @@ class SettingsViewModel(
     }
     
     /**
+     * 显示修改密码对话框
+     */
+    fun showChangePasswordDialog() {
+        _uiState.update { it.copy(
+            showChangePasswordDialog = true,
+            currentPasswordInput = "",
+            newPasswordInput = ""
+        ) }
+    }
+    
+    /**
+     * 隐藏修改密码对话框
+     */
+    fun hideChangePasswordDialog() {
+        _uiState.update { it.copy(showChangePasswordDialog = false) }
+    }
+    
+    /**
+     * 更新当前密码输入
+     */
+    fun updateCurrentPassword(password: String) {
+        _uiState.update { it.copy(currentPasswordInput = password) }
+    }
+    
+    /**
+     * 更新新密码输入
+     */
+    fun updateNewPassword(password: String) {
+        _uiState.update { it.copy(newPasswordInput = password) }
+    }
+    
+    /**
+     * 修改密码
+     */
+    fun changePassword() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val serverUrl = state.settings.cloudServerUrl
+            val username = state.settings.cloudUsername
+            val password = state.settings.cloudPassword
+            val currentPassword = state.currentPasswordInput
+            val newPassword = state.newPasswordInput
+            
+            if (serverUrl.isBlank() || username.isBlank() || password.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请先配置云同步参数") }
+                return@launch
+            }
+            
+            if (currentPassword.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请输入当前密码") }
+                return@launch
+            }
+            
+            if (newPassword.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请输入新密码") }
+                return@launch
+            }
+            
+            if (newPassword.length < 6) {
+                _uiState.update { it.copy(syncResult = "新密码长度不能少于6位") }
+                return@launch
+            }
+            
+            _uiState.update { it.copy(syncResult = "正在修改密码...") }
+            
+            val result = cloudSyncService.changePassword(serverUrl, username, password, currentPassword, newPassword)
+            
+            result.fold(
+                onSuccess = {
+                    _uiState.update { it.copy(
+                        syncResult = "密码修改成功！",
+                        showChangePasswordDialog = false
+                    ) }
+                },
+                onFailure = { error ->
+                    _uiState.update { it.copy(
+                        syncResult = "修改密码失败：${error.message}"
+                    ) }
+                }
+            )
+        }
+    }
+    
+    /**
      * 同步云端数据
      * 上传本地数据，下载云端数据
      */
@@ -478,17 +522,23 @@ class SettingsViewModel(
                 if (downloadResult.isSuccess) {
                     val cloudRecords = downloadResult.getOrNull() ?: emptyList()
                     
-                    // 插入下载的记录
-                    var downloadedCount = 0
+                    // 使用upsertFromCloud处理云端数据（新记录插入，已有记录按需更新）
+                    var insertedCount = 0
+                    var updatedCount = 0
                     for (record in cloudRecords) {
-                        workRepository.insertIfNotExists(cloudSyncService.run { record.toWorkRecord() })
-                        downloadedCount++
+                        val workRecord = cloudSyncService.run { record.toWorkRecord() }
+                        if (workRepository.upsertFromCloud(workRecord)) {
+                            insertedCount++
+                        } else {
+                            updatedCount++
+                        }
                     }
                     
+                    val updatedInfo = if (updatedCount > 0) "，更新${updatedCount}条" else ""
                     _uiState.update { 
                         it.copy(
                             isSyncing = false,
-                            syncResult = "同步完成：上传${result.uploadedCount}条，下载${downloadedCount}条"
+                            syncResult = "同步完成：上传${result.uploadedCount}条，新增${insertedCount}条${updatedInfo}"
                         ) 
                     }
                 } else {
@@ -536,17 +586,23 @@ class SettingsViewModel(
             if (result.isSuccess) {
                 val cloudRecords = result.getOrNull() ?: emptyList()
                 
-                // 插入下载的记录
-                var downloadedCount = 0
+                // 使用upsertFromCloud处理云端数据（新记录插入，已有记录按需更新）
+                var insertedCount = 0
+                var updatedCount = 0
                 for (record in cloudRecords) {
-                    workRepository.insertIfNotExists(cloudSyncService.run { record.toWorkRecord() })
-                    downloadedCount++
+                    val workRecord = cloudSyncService.run { record.toWorkRecord() }
+                    if (workRepository.upsertFromCloud(workRecord)) {
+                        insertedCount++
+                    } else {
+                        updatedCount++
+                    }
                 }
                 
+                val updatedInfo = if (updatedCount > 0) "，更新${updatedCount}条" else ""
                 _uiState.update { 
                     it.copy(
                         isSyncing = false,
-                        syncResult = "下载完成：${downloadedCount}条"
+                        syncResult = "下载完成：新增${insertedCount}条${updatedInfo}"
                     ) 
                 }
             } else {

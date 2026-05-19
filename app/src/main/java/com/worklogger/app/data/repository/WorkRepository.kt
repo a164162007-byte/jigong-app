@@ -123,10 +123,6 @@ class WorkRepository(
         workRecordDao.emptyTrash()
     }
     
-    suspend fun cleanOldTrashRecords(timestamp: Long) {
-        workRecordDao.deleteOldTrashRecords(timestamp)
-    }
-    
     suspend fun softDeleteRecord(id: Long) {
         workRecordDao.moveToTrash(id)
     }
@@ -186,6 +182,56 @@ class WorkRepository(
     
     suspend fun updatePhrase(phrase: QuickPhrase, newText: String) {
         quickPhraseDao.updatePhrase(phrase.copy(phrase = newText))
+    }
+
+    /**
+     * 清理超过指定时间的回收站记录
+     * 
+     * @param beforeTime 时间戳，删除此时间之前标记为删除的记录
+     */
+    suspend fun cleanOldTrashRecords(beforeTime: Long) {
+        val allRecords = workRecordDao.getAllRecordsOnce()
+        for (record in allRecords) {
+            if (record.isDeleted && record.deletedAt != null && record.deletedAt < beforeTime) {
+                workRecordDao.permanentlyDelete(record.id.toLong())
+            }
+        }
+    }
+
+    /**
+     * 从云端同步记录：如果本地已存在同日期同类型的记录则更新，否则插入
+     * 用于云端数据下载时的增量更新
+     * 
+     * @param record 云端同步下来的记录
+     * @return true 表示插入，false 表示更新
+     */
+    suspend fun upsertFromCloud(record: WorkRecord): Boolean {
+        // 构造唯一键（日期 + 是否加班 + 是否手动折算）
+        val key = "${record.date}_${record.isOvertime}_${record.isManual}"
+        
+        // 查询本地是否存在相同键的记录
+        val allRecords = workRecordDao.getAllRecordsOnce()
+        val existingRecord = allRecords.find { r ->
+            "${r.date}_${r.isOvertime}_${r.isManual}" == key
+        }
+        
+        return if (existingRecord != null) {
+            // 本地已存在，检查是否有差异需要更新
+            val hasDifference = existingRecord.hours != record.hours ||
+                    existingRecord.location != record.location ||
+                    existingRecord.remark != record.remark ||
+                    existingRecord.mealSubsidy != record.mealSubsidy
+            
+            if (hasDifference) {
+                // 用云端数据覆盖本地记录
+                workRecordDao.update(record.copy(id = existingRecord.id))
+            }
+            false  // 返回false表示是更新操作
+        } else {
+            // 本地不存在，直接插入
+            workRecordDao.insert(record)
+            true  // 返回true表示是插入操作
+        }
     }
 
     /**
