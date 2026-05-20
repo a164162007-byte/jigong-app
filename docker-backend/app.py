@@ -1491,10 +1491,13 @@ def api_import_data():
                     return jsonify({'success': False, 'message': 'JSON文件中未找到记录数据'})
                 
                 imported, duplicates, updated = process_records(records)
+                result_data = {'success_count': imported, 'error_count': duplicates}
+                if upsert_mode:
+                    result_data['updated_count'] = updated
                 return jsonify({
                     'success': True,
-                    'data': {'success_count': imported, 'error_count': duplicates},
-                    'message': f'成功导入 {imported} 条记录，跳过 {duplicates} 条重复记录'
+                    'data': result_data,
+                    'message': f'成功导入 {imported} 条记录' + (f'，更新 {updated} 条' if upsert_mode else f'，跳过 {duplicates} 条重复记录')
                 })
             except Exception as e:
                 return jsonify({'success': False, 'message': f'JSON解析失败：{str(e)}'})
@@ -1539,11 +1542,13 @@ def api_import_data():
         
         # 使用统一的process_records处理（自动执行饭补业务规则）
         imported, duplicates, updated = process_records(records)
-        
+        result_data = {'success_count': imported, 'error_count': duplicates}
+        if upsert_mode:
+            result_data['updated_count'] = updated
         return jsonify({
             'success': True,
-            'data': {'success_count': imported, 'error_count': duplicates},
-            'message': f'成功导入 {imported} 条记录，跳过 {duplicates} 条重复记录'
+            'data': result_data,
+            'message': f'成功导入 {imported} 条记录' + (f'，更新 {updated} 条' if upsert_mode else f'，跳过 {duplicates} 条重复记录')
         })
     except ImportError:
         return jsonify({'success': False, 'message': 'Excel导入功能需要安装openpyxl库'})

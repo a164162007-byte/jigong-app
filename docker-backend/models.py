@@ -546,7 +546,8 @@ def upsert_work_record(user_id, record_type, work_date, location, start_time=Non
                        morning_end_time=None, afternoon_start_time=None, hours=None, remark='', meal_subsidy=0):
     """
     插入或更新记工记录（云同步upsert模式使用）
-    如果同日期同类型记录已存在，则更新；否则插入
+    精确查重：日期+类型+工时+地点（与App端insertIfNotExists一致）
+    如果同日期同类型同工时同地点的记录已存在，则更新；否则插入
     
     参数:
         user_id: 用户ID
@@ -564,8 +565,8 @@ def upsert_work_record(user_id, record_type, work_date, location, start_time=Non
     返回:
         tuple: (record_id, is_new) - 记录ID和是否新建
     """
-    # 检查是否存在
-    duplicate = check_duplicate_record(user_id, work_date, record_type)
+    # 精确查重：日期+类型+工时+地点（与App端insertIfNotExists一致）
+    duplicate = check_duplicate_record(user_id, work_date, record_type, hours=hours, location=location)
     if duplicate['has_duplicate']:
         # 更新已有记录
         existing = duplicate['records'][0]
