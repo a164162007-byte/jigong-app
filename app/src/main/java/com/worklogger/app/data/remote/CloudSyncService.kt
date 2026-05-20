@@ -261,7 +261,7 @@ object CloudSyncService {
     ): Result<Pair<Int, Int>> {
         return withContext(Dispatchers.IO) {
             try {
-                val url = buildUrl(serverUrl, "api/import")
+                val url = buildUrl(serverUrl, "api/import?upsert=true")
                 val mediaType = "application/json; charset=utf-8".toMediaType()
 
                 // 转换为 Web 端格式
@@ -280,7 +280,7 @@ object CloudSyncService {
                     )
                 }
 
-                val importData = mapOf("records" to cloudRecords)
+                val importData = mapOf("records" to cloudRecords, "upsert" to true)
                 val body = RequestBody.create(mediaType, gson.toJson(importData))
                 val request = buildAuthenticatedRequest(url, username, password, "POST", body)
                 val response = client.newCall(request).execute()
@@ -295,7 +295,9 @@ object CloudSyncService {
                         val data = root["data"] as? Map<String, Any>
                         val successCount = (data?.get("success_count") as? Number)?.toInt() ?: records.size
                         val errorCount = (data?.get("error_count") as? Number)?.toInt() ?: 0
-                        Result.success(Pair(successCount, errorCount))
+                        // 解析updated_count（upsert模式下会返回）
+                        val updatedCount = (data?.get("updated_count") as? Number)?.toInt() ?: 0
+                        Result.success(Pair(successCount + updatedCount, errorCount))
                     } else {
                         Result.failure(IOException(root["message"]?.toString() ?: "上传失败"))
                     }

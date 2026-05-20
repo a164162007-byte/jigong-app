@@ -34,7 +34,7 @@ from io import BytesIO
 from models import (
     init_db, create_user, authenticate_user, get_user_by_id,
     get_all_settings, update_setting, update_settings,
-    add_work_record, update_work_record, delete_work_record,
+    add_work_record, update_work_record, delete_work_record, upsert_work_record,
     get_work_records, get_records_by_date_range, get_records_by_year,
     get_records_by_month, get_statistics, clear_all_records,
     get_backup_list, add_backup_record, get_data_hash,
@@ -72,6 +72,7 @@ app.config['BACKUP_DIR'] = os.environ.get(
 # 确保必要目录存在
 os.makedirs(os.path.dirname(app.config['DATABASE']), exist_ok=True)
 os.makedirs(app.config['BACKUP_DIR'], exist_ok=True)
+os.makedirs(os.path.join(os.path.dirname(__file__), 'static'), exist_ok=True)  # 在线更新功能需要
 
 # 初始化数据库
 init_db()
@@ -557,16 +558,17 @@ def api_update_record(record_id):
     # 业务规则强制执行：加班没有饭补，标准工必须有饭补，手动折算自由选择
     raw_meal_subsidy = float(data.get('meal_subsidy', 0)) if data.get('meal_subsidy') else None
     record_type = data.get('record_type', '')
+    # 优先使用新key，兼容旧key
+    upd_settings = get_all_settings(session['user_id'])
+    meal_subsidy_per_day = float(upd_settings.get('meal_subsidy_per_day', upd_settings.get('meal_subsidy', 30)))
     if record_type == 'overtime':
         final_meal_subsidy = 0
     elif record_type == 'standard':
-        upd_settings = get_all_settings(session['user_id'])
-        final_meal_subsidy = float(upd_settings.get('meal_subsidy', 30))
+        final_meal_subsidy = meal_subsidy_per_day
     else:
         # Android上传meal_subsidy=1表示有饭补，需转换为实际金额
         if raw_meal_subsidy and raw_meal_subsidy > 0:
-            upd_settings = get_all_settings(session['user_id'])
-            final_meal_subsidy = float(upd_settings.get('meal_subsidy', 30))
+            final_meal_subsidy = meal_subsidy_per_day
         else:
             final_meal_subsidy = 0
     
@@ -1347,12 +1349,26 @@ def api_import_data():
     1. application/json: JSON批量导入 {"records": [...]}（供App云同步使用）
     2. multipart/form-data + JSON文件: 上传.json文件
     3. multipart/form-data + Excel文件: 上传.xlsx/.xls文件
+    
+    upsert模式（App云同步使用）:
+    - 请求参数中包含 upsert=true 或请求体中包含 "upsert": true
+    - 遇到重复记录（同日期同类型）时会更新而非跳过
     """
     try:
         # 获取用户设置（用于饭补金额和标准工时）
         user_settings = get_all_settings(session['user_id'])
-        meal_subsidy_amount = float(user_settings.get('meal_subsidy', 30))
+        # 优先使用新key，兼容旧key
+        meal_subsidy_amount = float(user_settings.get('meal_subsidy_per_day', user_settings.get('meal_subsidy', 30)))
         daily_hours = float(user_settings.get('daily_hours', 9))
+        
+        # 检查是否为upsert模式（App云同步上传时使用）
+        upsert_mode = False
+        if request.args.get('upsert', 'false').lower() == 'true':
+            upsert_mode = True
+        elif request.is_json:
+            json_data = request.get_json(silent=True)
+            if json_data and json_data.get('upsert', False):
+                upsert_mode = True
         
         # 辅助函数：强制执行饭补业务规则
         def enforce_meal_subsidy(record_type, raw_meal_subsidy):
@@ -1374,6 +1390,7 @@ def api_import_data():
         def process_records(records):
             imported = 0
             duplicates = 0
+            updated = 0
             for record in records:
                 work_date = record.get('work_date') or record.get('date')
                 record_type = record.get('record_type', 'standard')
@@ -1384,31 +1401,50 @@ def api_import_data():
                 if not work_date:
                     continue
                 
-                # 检查是否重复
-                duplicate = check_duplicate_record(session['user_id'], work_date, record_type)
-                if duplicate['has_duplicate']:
-                    duplicates += 1
-                    continue
-                
                 # 强制执行饭补业务规则
                 final_meal_subsidy = enforce_meal_subsidy(record_type, raw_meal_subsidy)
                 
-                # 添加记录
-                add_work_record(
-                    user_id=session['user_id'],
-                    record_type=record_type,
-                    work_date=work_date,
-                    location=location,
-                    start_time=record.get('start_time'),
-                    end_time=record.get('end_time'),
-                    morning_end_time=record.get('morning_end_time'),
-                    afternoon_start_time=record.get('afternoon_start_time'),
-                    hours=hours,
-                    remark=record.get('remark', ''),
-                    meal_subsidy=final_meal_subsidy
-                )
-                imported += 1
-            return imported, duplicates
+                if upsert_mode:
+                    # upsert模式：存在则更新，不存在则插入
+                    record_id, is_new = upsert_work_record(
+                        user_id=session['user_id'],
+                        record_type=record_type,
+                        work_date=work_date,
+                        location=location if location else '未填写',
+                        start_time=record.get('start_time'),
+                        end_time=record.get('end_time'),
+                        morning_end_time=record.get('morning_end_time'),
+                        afternoon_start_time=record.get('afternoon_start_time'),
+                        hours=hours,
+                        remark=record.get('remark', ''),
+                        meal_subsidy=final_meal_subsidy
+                    )
+                    if is_new:
+                        imported += 1
+                    else:
+                        updated += 1
+                else:
+                    # 原有模式：检查重复后跳过
+                    duplicate = check_duplicate_record(session['user_id'], work_date, record_type)
+                    if duplicate['has_duplicate']:
+                        duplicates += 1
+                        continue
+                    
+                    add_work_record(
+                        user_id=session['user_id'],
+                        record_type=record_type,
+                        work_date=work_date,
+                        location=location,
+                        start_time=record.get('start_time'),
+                        end_time=record.get('end_time'),
+                        morning_end_time=record.get('morning_end_time'),
+                        afternoon_start_time=record.get('afternoon_start_time'),
+                        hours=hours,
+                        remark=record.get('remark', ''),
+                        meal_subsidy=final_meal_subsidy
+                    )
+                    imported += 1
+            return imported, duplicates, updated
         
         # 方式1: JSON请求体（App云同步使用）
         if request.is_json:
@@ -1416,11 +1452,14 @@ def api_import_data():
             records = data.get('records', [])
             if not records:
                 return jsonify({'success': False, 'message': '没有要导入的记录'})
-            imported, duplicates = process_records(records)
+            imported, duplicates, updated = process_records(records)
+            result_data = {'success_count': imported, 'error_count': duplicates}
+            if upsert_mode:
+                result_data['updated_count'] = updated
             return jsonify({
                 'success': True,
-                'data': {'success_count': imported, 'error_count': duplicates},
-                'message': f'成功导入 {imported} 条记录，跳过 {duplicates} 条重复记录'
+                'data': result_data,
+                'message': f'成功导入 {imported} 条记录' + (f'，更新 {updated} 条' if upsert_mode else f'，跳过 {duplicates} 条重复记录')
             })
         
         # 方式2/3: FormData文件上传
@@ -1451,7 +1490,7 @@ def api_import_data():
                 if not records:
                     return jsonify({'success': False, 'message': 'JSON文件中未找到记录数据'})
                 
-                imported, duplicates = process_records(records)
+                imported, duplicates, updated = process_records(records)
                 return jsonify({
                     'success': True,
                     'data': {'success_count': imported, 'error_count': duplicates},
@@ -1499,7 +1538,7 @@ def api_import_data():
             })
         
         # 使用统一的process_records处理（自动执行饭补业务规则）
-        imported, duplicates = process_records(records)
+        imported, duplicates, updated = process_records(records)
         
         return jsonify({
             'success': True,
@@ -1665,9 +1704,18 @@ def api_admin_reset_password():
 # 启动入口
 # ============================================================================
 
-if __name__ == '__main__':
-    # 本地开发模式
-    app.run(host='0.0.0.0', port=8080, debug=True)
+@app.before_request
+def check_restart():
+    """检查是否需要重启"""
+    restart_marker = '/app/.need_restart'
+    if os.path.exists(restart_marker):
+        if request.path != '/api/update':
+            try:
+                os.remove(restart_marker)
+            except:
+                pass
+            import threading
+            threading.Timer(1, lambda: os._exit(0)).start()
 
 
 # ============================================================================
@@ -1707,15 +1755,15 @@ def api_update():
     import tempfile
     import zipfile
     import shutil
-    
+
     # 验证文件
     if 'file' not in request.files:
         return jsonify({'success': False, 'message': '未选择文件'})
-    
+
     file = request.files['file']
     if not file.filename.endswith('.zip'):
         return jsonify({'success': False, 'message': '请上传ZIP文件'})
-    
+
     try:
         # 备份数据库（备份到/app/backups目录，确保持久化）
         db_path = os.environ.get('DATABASE_PATH', '/app/data/work_records.db')
@@ -1724,30 +1772,30 @@ def api_update():
         backup_path = os.path.join(backup_dir, f'auto_backup_{datetime.now().strftime("%Y%m%d%H%M%S")}.db')
         if os.path.exists(db_path):
             shutil.copy2(db_path, backup_path)
-        
+
         # 解压ZIP
         temp_dir = tempfile.mkdtemp()
         zip_path = os.path.join(temp_dir, 'update.zip')
         file.save(zip_path)
-        
+
         with zipfile.ZipFile(zip_path, 'r') as zf:
             zf.extractall(temp_dir)
-        
+
         # 查找应用目录
         app_source = temp_dir
         for root, dirs, files in os.walk(temp_dir):
             if 'app.py' in files:
                 app_source = root
                 break
-        
+
         # 复制文件
         app_dir = '/app'
-        
+
         for filename in ['app.py', 'models.py', 'requirements.txt']:
             src = os.path.join(app_source, filename)
             if os.path.exists(src):
                 shutil.copy2(src, os.path.join(app_dir, filename))
-        
+
         for dirname in ['templates', 'static']:
             src = os.path.join(app_source, dirname)
             if os.path.exists(src):
@@ -1755,29 +1803,20 @@ def api_update():
                 if os.path.exists(dst):
                     shutil.rmtree(dst)
                 shutil.copytree(src, dst)
-        
+
         # 写入重启标记
         with open(os.path.join(app_dir, '.need_restart'), 'w') as f:
             f.write('1')
-        
+
         # 清理临时目录
         shutil.rmtree(temp_dir)
-        
+
         return jsonify({'success': True, 'message': '更新成功，正在重启...'})
-        
+
     except Exception as e:
         return jsonify({'success': False, 'message': f'更新失败: {str(e)}'})
 
 
-@app.before_request
-def check_restart():
-    """检查是否需要重启"""
-    restart_marker = '/app/.need_restart'
-    if os.path.exists(restart_marker):
-        if request.path != '/api/update':
-            try:
-                os.remove(restart_marker)
-            except:
-                pass
-            import threading
-            threading.Timer(1, lambda: os._exit(0)).start()
+if __name__ == '__main__':
+    # 本地开发模式
+    app.run(host='0.0.0.0', port=8080, debug=True)

@@ -222,17 +222,7 @@ def init_db():
     except:
         pass  # 字段已存在
     
-    # 添加备注字段（v2.1.9.7）
-    try:
-        cursor.execute('ALTER TABLE work_records ADD COLUMN remark TEXT DEFAULT ""')
-    except:
-        pass  # 字段已存在
-    
-    # 添加饭补字段（v2.1.9.7）
-    try:
-        cursor.execute('ALTER TABLE work_records ADD COLUMN meal_subsidy REAL DEFAULT 0')
-    except:
-        pass  # 字段已存在
+    # 添加备注字段（v2.1.9.7）- 已在上方添加，此处不重复
     
     # 创建设置表（添加user_id）
     cursor.execute('''
@@ -254,7 +244,10 @@ def init_db():
         ('offwork_time', '18:00'),
         ('sync_wifi_only', '0'),
         ('theme', 'auto'),
-        ('quick_phrases', '["调休","出差","请假","事假","病假"]')
+        ('quick_phrases', '["调休","出差","请假","事假","病假"]'),
+        # v2.1.9.15新增设置key（与App对齐）
+        ('overtime_work_hours', '8'),
+        ('meal_subsidy_per_day', '30')
     ]
     for key, value in new_settings:
         try:
@@ -345,8 +338,10 @@ def create_user(username, password):
         # 为新用户初始化默认设置
         default_settings = {
             'daily_hours': '9',
-            'overtime_rate': '8',
-            'meal_subsidy': '30',
+            'overtime_rate': '8',  # 兼容旧key
+            'overtime_work_hours': '8',  # 与App对齐：加班8小时=1工
+            'meal_subsidy': '30',  # 兼容旧key
+            'meal_subsidy_per_day': '30',  # 更清晰的key名
             'daily_wage': '260',
             'monthly_hours_target': '0',
             # v1.13.0新增设置
@@ -547,6 +542,67 @@ def update_work_record(user_id, record_id, record_type, work_date, location, sta
     conn.close()
 
 
+def upsert_work_record(user_id, record_type, work_date, location, start_time=None, end_time=None,
+                       morning_end_time=None, afternoon_start_time=None, hours=None, remark='', meal_subsidy=0):
+    """
+    插入或更新记工记录（云同步upsert模式使用）
+    如果同日期同类型记录已存在，则更新；否则插入
+    
+    参数:
+        user_id: 用户ID
+        record_type: 记录类型 (standard/manual/overtime)
+        work_date: 工作日期 (YYYY-MM-DD)
+        location: 工作地点（必填）
+        start_time: 开始时间 (HH:MM)
+        end_time: 结束时间 (HH:MM)
+        morning_end_time: 上午下班时间 (HH:MM)
+        afternoon_start_time: 下午上班时间 (HH:MM)
+        hours: 工作时长（小时）
+        remark: 备注
+        meal_subsidy: 饭补金额
+    
+    返回:
+        tuple: (record_id, is_new) - 记录ID和是否新建
+    """
+    # 检查是否存在
+    duplicate = check_duplicate_record(user_id, work_date, record_type)
+    if duplicate['has_duplicate']:
+        # 更新已有记录
+        existing = duplicate['records'][0]
+        record_id = existing['id']
+        update_work_record(
+            user_id=user_id,
+            record_id=record_id,
+            record_type=record_type,
+            work_date=work_date,
+            location=location,
+            start_time=start_time,
+            end_time=end_time,
+            morning_end_time=morning_end_time,
+            afternoon_start_time=afternoon_start_time,
+            hours=hours,
+            remark=remark,
+            meal_subsidy=meal_subsidy
+        )
+        return record_id, False
+    else:
+        # 新增记录
+        record_id = add_work_record(
+            user_id=user_id,
+            record_type=record_type,
+            work_date=work_date,
+            location=location,
+            start_time=start_time,
+            end_time=end_time,
+            morning_end_time=morning_end_time,
+            afternoon_start_time=afternoon_start_time,
+            hours=hours,
+            remark=remark,
+            meal_subsidy=meal_subsidy
+        )
+        return record_id, True
+
+
 def get_work_record_by_id(user_id, record_id):
     """
     根据ID获取单条记录
@@ -705,7 +761,7 @@ def get_records_by_month(user_id, year, month):
     return [dict_from_row(row) for row in rows]
 
 
-def check_duplicate_record(user_id, work_date, record_type=None):
+def check_duplicate_record(user_id, work_date, record_type=None, hours=None, location=None):
     """
     检查指定日期是否已有记工记录
     
@@ -713,6 +769,8 @@ def check_duplicate_record(user_id, work_date, record_type=None):
         user_id: 用户ID
         work_date: 工作日期 (YYYY-MM-DD)
         record_type: 记录类型（可选，用于更精确检测）
+        hours: 工时（可选，用于更精确检测）
+        location: 地点（可选，用于更精确检测）
     
     返回:
         dict: 包含是否有重复记录和记录详情的字典
@@ -720,17 +778,21 @@ def check_duplicate_record(user_id, work_date, record_type=None):
     conn = get_db()
     cursor = conn.cursor()
     
-    if record_type:
-        cursor.execute('''
-            SELECT * FROM work_records 
-            WHERE user_id = ? AND work_date = ? AND record_type = ? AND deleted_at IS NULL
-        ''', (user_id, work_date, record_type))
-    else:
-        cursor.execute('''
-            SELECT * FROM work_records 
-            WHERE user_id = ? AND work_date = ? AND deleted_at IS NULL
-        ''', (user_id, work_date))
+    conditions = ["user_id = ?", "work_date = ?", "deleted_at IS NULL"]
+    params = [user_id, work_date]
     
+    if record_type:
+        conditions.append("record_type = ?")
+        params.append(record_type)
+    if hours is not None:
+        conditions.append("hours = ?")
+        params.append(hours)
+    if location is not None:
+        conditions.append("location = ?")
+        params.append(location)
+    
+    where_clause = " AND ".join(conditions)
+    cursor.execute(f'SELECT * FROM work_records WHERE {where_clause}', params)
     rows = cursor.fetchall()
     conn.close()
     
@@ -1018,8 +1080,10 @@ def get_statistics(user_id, start_date=None, end_date=None, year=None, month=Non
     # 获取用户设置
     settings = get_all_settings(user_id)
     daily_hours = float(settings.get('daily_hours', 9))
-    overtime_rate = float(settings.get('overtime_rate', 8))
-    meal_subsidy_per_day = float(settings.get('meal_subsidy', 30))
+    # 优先使用新key（overtime_work_hours），兼容旧key（overtime_rate）
+    overtime_rate = float(settings.get('overtime_work_hours', settings.get('overtime_rate', 8)))
+    # 优先使用新key（meal_subsidy_per_day），兼容旧key（meal_subsidy）
+    meal_subsidy_per_day = float(settings.get('meal_subsidy_per_day', settings.get('meal_subsidy', 30)))
     daily_wage = float(settings.get('daily_wage', 260))
     
     # 获取记录
@@ -1484,8 +1548,10 @@ def get_yearly_report(user_id, year):
     """
     settings = get_all_settings(user_id)
     daily_hours = float(settings.get('daily_hours', 9))
-    overtime_rate = float(settings.get('overtime_rate', 8))
-    meal_subsidy_per_day = float(settings.get('meal_subsidy', 30))
+    # 优先使用新key（overtime_work_hours），兼容旧key（overtime_rate）
+    overtime_rate = float(settings.get('overtime_work_hours', settings.get('overtime_rate', 8)))
+    # 优先使用新key（meal_subsidy_per_day），兼容旧key（meal_subsidy）
+    meal_subsidy_per_day = float(settings.get('meal_subsidy_per_day', settings.get('meal_subsidy', 30)))
     daily_wage = float(settings.get('daily_wage', 260))
     
     # 获取全年记录
