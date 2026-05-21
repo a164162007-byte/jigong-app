@@ -237,10 +237,10 @@ def register():
                 return jsonify({'success': False, 'message': '用户名长度应为2-20个字符'})
             return render_template('login.html', error='用户名长度应为2-20个字符', show_register=True)
         
-        if len(password) < 4:
+        if len(password) < 6:
             if request.is_json:
-                return jsonify({'success': False, 'message': '密码长度至少4个字符'})
-            return render_template('login.html', error='密码长度至少4个字符', show_register=True)
+                return jsonify({'success': False, 'message': '密码长度至少6个字符'})
+            return render_template('login.html', error='密码长度至少6个字符', show_register=True)
         
         if password != confirm_password:
             if request.is_json:
@@ -642,7 +642,10 @@ def api_get_statistics():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     
-    if year:
+    if year and month:
+        # year+month同时传入时，按月统计
+        stats = get_statistics(session['user_id'], month={'year': year, 'month': month})
+    elif year:
         stats = get_statistics(session['user_id'], year=year)
     elif month:
         # 支持传入year参数指定具体年份，否则使用当前年份
@@ -1623,8 +1626,8 @@ def api_change_password():
     if not current_password or not new_password:
         return jsonify({'success': False, 'message': '请填写所有字段'})
     
-    if len(new_password) < 4:
-        return jsonify({'success': False, 'message': '新密码长度至少4位'})
+    if len(new_password) < 6:
+        return jsonify({'success': False, 'message': '新密码长度至少6位'})
     
     # 验证当前密码
     user = models.get_user_by_id(session['user_id'])
@@ -1685,8 +1688,8 @@ def api_admin_reset_password():
     if not user_id:
         return jsonify({'success': False, 'message': '参数不完整'})
     
-    if len(new_password) < 4:
-        return jsonify({'success': False, 'message': '密码至少4位'})
+    if len(new_password) < 6:
+        return jsonify({'success': False, 'message': '密码至少6位'})
     
     # 检查用户是否存在
     user = models.get_user_by_id(user_id)

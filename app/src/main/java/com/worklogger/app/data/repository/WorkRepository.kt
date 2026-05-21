@@ -206,13 +206,14 @@ class WorkRepository(
      * @return true 表示插入，false 表示更新
      */
     suspend fun upsertFromCloud(record: WorkRecord): Boolean {
-        // 构造唯一键（日期 + 是否加班 + 是否手动折算）
-        val key = "${record.date}_${record.isOvertime}_${record.isManual}"
+        // 构造唯一键（日期 + 是否加班 + 是否手动折算 + 工时 + 地点）
+        // 与insertIfNotExists保持一致，同一天可能有多条同类型记录（如force_add）
+        val key = "${record.date}_${record.isOvertime}_${record.isManual}_${record.hours}_${record.location}"
         
         // 查询本地是否存在相同键的记录
         val allRecords = workRecordDao.getAllRecordsOnce()
         val existingRecord = allRecords.find { r ->
-            "${r.date}_${r.isOvertime}_${r.isManual}" == key
+            "${r.date}_${r.isOvertime}_${r.isManual}_${r.hours}_${r.location}" == key
         }
         
         return if (existingRecord != null) {
