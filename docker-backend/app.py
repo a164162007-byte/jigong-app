@@ -1740,11 +1740,11 @@ def api_version():
 def admin_required(f):
     """
     管理员权限验证装饰器
+    users表没有is_admin字段，通过username判断
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        user = get_current_user()
-        if not user or not user.get('is_admin'):
+        if session.get('username') != 'admin':
             if request.is_json or request.headers.get('Accept') == 'application/json':
                 return jsonify({'success': False, 'message': '需要管理员权限'}), 403
             return redirect(url_for('login'))
@@ -1757,9 +1757,7 @@ def admin_required(f):
 @admin_required
 def api_update():
     """在线更新(仅管理员)"""
-    user = get_current_user()
-    if not user.get('is_admin'):
-        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+    # admin_required装饰器已验证权限，此处无需重复检查
     import tempfile
     import zipfile
     import shutil

@@ -355,7 +355,9 @@ object CloudSyncService {
             try {
                 val url = buildUrl(serverUrl, "api/settings")
                 val mediaType = "application/json; charset=utf-8".toMediaType()
-                val body = RequestBody.create(mediaType, gson.toJson(mapOf("settings" to settings)))
+                // Docker API期望扁平字典格式 {"key": "value", ...}，不是{"settings": [...]}
+                val settingsMap = settings.associate { it.key to it.value }
+                val body = RequestBody.create(mediaType, gson.toJson(settingsMap))
                 val request = buildAuthenticatedRequest(url, username, password, "POST", body)
                 val response = client.newCall(request).execute()
 

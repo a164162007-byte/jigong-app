@@ -224,8 +224,8 @@ class WorkRepository(
                     existingRecord.mealSubsidy != record.mealSubsidy
             
             if (hasDifference) {
-                // 用云端数据覆盖本地记录
-                workRecordDao.update(record.copy(id = existingRecord.id))
+                // 用云端数据覆盖本地记录，保留原始创建时间
+                workRecordDao.update(record.copy(id = existingRecord.id, createdAt = existingRecord.createdAt))
             }
             false  // 返回false表示是更新操作
         } else {

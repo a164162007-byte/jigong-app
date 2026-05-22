@@ -477,7 +477,10 @@ class SettingsViewModel(
             
             result.fold(
                 onSuccess = {
+                    // 密码修改成功后，更新本地存储的云同步密码，否则下次同步会用旧密码失败
+                    settingsRepository.updateCloudPassword(newPassword)
                     _uiState.update { it.copy(
+                        cloudPasswordInput = newPassword,
                         syncResult = "密码修改成功！",
                         showChangePasswordDialog = false
                     ) }
