@@ -82,7 +82,8 @@ object CloudSyncService {
     private val client = OkHttpClient.Builder()
         .cookieJar(cookieJar)
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
         .followRedirects(true)
         .build()
 
@@ -117,6 +118,7 @@ object CloudSyncService {
         val builder = Request.Builder()
             .url(url)
             .header("Authorization", buildAuthHeader(username, password))
+            .header("Accept", "application/json")
         
         when (method) {
             "POST" -> builder.post(body!!)
@@ -281,8 +283,14 @@ object CloudSyncService {
                 // 逐条转换
                 val records = dataList.map { rawMap -> parseCloudWorkRecord(rawMap) }
                 Result.success(records)
+            } catch (e: java.net.UnknownHostException) {
+                Result.failure(IOException("域名解析失败，请检查服务器地址"))
+            } catch (e: java.net.ConnectException) {
+                Result.failure(IOException("无法连接服务器，请检查地址和端口"))
+            } catch (e: java.net.SocketTimeoutException) {
+                Result.failure(IOException("连接超时，请检查网络"))
             } catch (e: Exception) {
-                Result.failure(e)
+                Result.failure(IOException("获取记录失败：${e.message}"))
             }
         }
     }
@@ -379,8 +387,14 @@ object CloudSyncService {
                 } else {
                     Result.failure(IOException("HTTP ${response.code}"))
                 }
+            } catch (e: java.net.UnknownHostException) {
+                Result.failure(IOException("域名解析失败，请检查服务器地址"))
+            } catch (e: java.net.ConnectException) {
+                Result.failure(IOException("无法连接服务器，请检查地址和端口"))
+            } catch (e: java.net.SocketTimeoutException) {
+                Result.failure(IOException("连接超时，请检查网络"))
             } catch (e: Exception) {
-                Result.failure(e)
+                Result.failure(IOException("上传失败：${e.message}"))
             }
         }
     }
@@ -598,23 +612,38 @@ object CloudSyncService {
                 val request = buildAuthenticatedRequest(url, username, password, "POST", body)
                 val response = client.newCall(request).execute()
 
+                if (response.code == 401) {
+                    return@withContext Result.failure(IOException("认证失败，请检查用户名和密码"))
+                }
+                
                 if (!response.isSuccessful) {
-                    return@withContext Result.failure(IOException("HTTP ${response.code}: ${response.message}"))
+                    return@withContext Result.failure(IOException("服务器错误 (HTTP ${response.code})"))
                 }
 
-                val bodyString = response.body?.string() ?: return@withContext Result.failure(IOException("Empty response"))
+                val bodyString = response.body?.string() ?: return@withContext Result.failure(IOException("服务器返回为空"))
                 
-                val rootType = object : TypeToken<Map<String, Any>>() {}.type
-                val root = gson.fromJson<Map<String, Any>>(bodyString, rootType)
-                
-                if (root["success"] == true) {
-                    Result.success(true)
-                } else {
-                    val message = root["message"]?.toString() ?: "修改密码失败"
-                    Result.failure(IOException(message))
+                try {
+                    val rootType = object : TypeToken<Map<String, Any>>() {}.type
+                    val root = gson.fromJson<Map<String, Any>>(bodyString, rootType)
+                    
+                    if (root["success"] == true) {
+                        Result.success(true)
+                    } else {
+                        val message = root["message"]?.toString() ?: "修改密码失败"
+                        Result.failure(IOException(message))
+                    }
+                } catch (e: Exception) {
+                    // 响应不是JSON格式
+                    Result.failure(IOException("服务器返回格式异常"))
                 }
+            } catch (e: java.net.UnknownHostException) {
+                Result.failure(IOException("域名解析失败，请检查服务器地址"))
+            } catch (e: java.net.ConnectException) {
+                Result.failure(IOException("无法连接服务器，请检查地址和端口"))
+            } catch (e: java.net.SocketTimeoutException) {
+                Result.failure(IOException("连接超时，请检查网络"))
             } catch (e: Exception) {
-                Result.failure(e)
+                Result.failure(IOException("修改密码失败：${e.message}"))
             }
         }
     }

@@ -1365,12 +1365,14 @@ def api_import_data():
         daily_hours = float(user_settings.get('daily_hours', 9))
         
         # 检查是否为upsert模式（App云同步上传时使用）
+        # 注意：request.get_json()只能调用一次（会消耗请求体），所以先缓存数据
         upsert_mode = False
+        cached_json_data = None
         if request.args.get('upsert', 'false').lower() == 'true':
             upsert_mode = True
         elif request.is_json:
-            json_data = request.get_json(silent=True)
-            if json_data and json_data.get('upsert', False):
+            cached_json_data = request.get_json(silent=True)
+            if cached_json_data and cached_json_data.get('upsert', False):
                 upsert_mode = True
         
         # 辅助函数：强制执行饭补业务规则
@@ -1451,7 +1453,10 @@ def api_import_data():
         
         # 方式1: JSON请求体（App云同步使用）
         if request.is_json:
-            data = request.get_json()
+            # 使用之前缓存的JSON数据，避免重复调用get_json()返回None
+            data = cached_json_data if cached_json_data is not None else request.get_json(silent=True)
+            if data is None:
+                return jsonify({'success': False, 'message': '请求数据解析失败'})
             records = data.get('records', [])
             if not records:
                 return jsonify({'success': False, 'message': '没有要导入的记录'})
@@ -1618,8 +1623,12 @@ def api_get_all_locations():
 def api_change_password():
     """
     修改密码
+    支持Session认证(Web端)和Basic Auth认证(App端)
     """
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'success': False, 'message': '请求数据无效'})
+    
     current_password = data.get('current_password', '')
     new_password = data.get('new_password', '')
     
@@ -1629,8 +1638,13 @@ def api_change_password():
     if len(new_password) < 6:
         return jsonify({'success': False, 'message': '新密码长度至少6位'})
     
+    # 获取当前用户ID（兼容Session和Basic Auth）
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'message': '请先登录'})
+    
     # 验证当前密码
-    user = models.get_user_by_id(session['user_id'])
+    user = models.get_user_by_id(user_id)
     if not user:
         return jsonify({'success': False, 'message': '用户不存在'})
     
@@ -1644,7 +1658,7 @@ def api_change_password():
     new_hash = hashlib.sha256((new_password + user['salt']).encode()).hexdigest()
     conn = models.get_db()
     cursor = conn.cursor()
-    cursor.execute('UPDATE users SET password = ? WHERE id = ?', (new_hash, session['user_id']))
+    cursor.execute('UPDATE users SET password = ? WHERE id = ?', (new_hash, user_id))
     conn.commit()
     conn.close()
     
