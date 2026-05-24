@@ -303,6 +303,8 @@ fun SettingsScreen(
                 serverUrl = uiState.cloudServerUrlInput,
                 username = uiState.cloudUsernameInput,
                 password = uiState.cloudPasswordInput,
+                isSyncing = uiState.isSyncing,
+                syncResult = uiState.syncResult,
                 onServerUrlChange = { viewModel.updateCloudServerUrl(it) },
                 onUsernameChange = { viewModel.updateCloudUsername(it) },
                 onPasswordChange = { viewModel.updateCloudPassword(it) },
@@ -565,6 +567,8 @@ fun CloudConfigDialog(
     serverUrl: String,
     username: String,
     password: String,
+    isSyncing: Boolean = false,
+    syncResult: String? = null,
     onServerUrlChange: (String) -> Unit,
     onUsernameChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
@@ -575,13 +579,13 @@ fun CloudConfigDialog(
     var passwordVisible by remember { mutableStateOf(false) }
     
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isSyncing) onDismiss() },
         icon = { Icon(Icons.Default.Cloud, contentDescription = null) },
         title = { Text("云同步设置") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedTextField(
                     value = serverUrl,
@@ -590,7 +594,8 @@ fun CloudConfigDialog(
                     placeholder = { Text("http://服务器地址:端口") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    supportingText = { Text("Web端Docker服务地址") }
+                    enabled = !isSyncing,
+                    supportingText = { Text("Docker后端地址，如 http://192.168.1.100:8080") }
                 )
                 
                 OutlinedTextField(
@@ -598,7 +603,8 @@ fun CloudConfigDialog(
                     onValueChange = onUsernameChange,
                     label = { Text("用户名") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSyncing
                 )
                 
                 OutlinedTextField(
@@ -617,22 +623,48 @@ fun CloudConfigDialog(
                             )
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSyncing
                 )
+                
+                // 状态提示
+                if (syncResult != null) {
+                    Text(
+                        text = syncResult,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (syncResult.contains("成功")) MaterialTheme.colorScheme.primary 
+                               else MaterialTheme.colorScheme.error
+                    )
+                }
             }
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onRegister) {
+                if (isSyncing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                }
+                TextButton(
+                    onClick = onRegister,
+                    enabled = !isSyncing
+                ) {
                     Text("注册")
                 }
-                TextButton(onClick = onSave) {
+                TextButton(
+                    onClick = onSave,
+                    enabled = !isSyncing
+                ) {
                     Text("保存")
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isSyncing
+            ) {
                 Text("取消")
             }
         }

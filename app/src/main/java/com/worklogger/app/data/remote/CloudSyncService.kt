@@ -147,6 +147,7 @@ object CloudSyncService {
                 val request = Request.Builder()
                     .url(url)
                     .post(body)
+                    .header("Accept", "application/json")
                     .build()
 
                 val response = client.newCall(request).execute()
@@ -163,8 +164,14 @@ object CloudSyncService {
                     val message = root["message"]?.toString() ?: "登录失败"
                     Result.failure(IOException(message))
                 }
+            } catch (e: java.net.UnknownHostException) {
+                Result.failure(IOException("域名解析失败，请检查服务器地址"))
+            } catch (e: java.net.ConnectException) {
+                Result.failure(IOException("无法连接服务器，请检查地址和端口"))
+            } catch (e: java.net.SocketTimeoutException) {
+                Result.failure(IOException("连接超时，请检查网络"))
             } catch (e: Exception) {
-                Result.failure(e)
+                Result.failure(IOException("登录失败：${e.message}"))
             }
         }
     }
@@ -172,6 +179,7 @@ object CloudSyncService {
 
     /**
      * 注册新用户
+     * 调用Docker后端 /register 接口，发送JSON格式请求
      */
     suspend fun register(
         serverUrl: String,
@@ -192,22 +200,46 @@ object CloudSyncService {
                 val request = Request.Builder()
                     .url(url)
                     .post(body)
+                    .header("Accept", "application/json")
                     .build()
                 
                 val response = client.newCall(request).execute()
+                
+                if (response.code == 302 || response.code == 301) {
+                    // 重定向说明注册成功（Docker Web端行为）
+                    Result.success(true)
+                    return@withContext Result.success(true)
+                }
+                
                 val bodyString = response.body?.string() ?: ""
                 
-                val rootType = object : TypeToken<Map<String, Any>>() {}.type
-                val root = gson.fromJson<Map<String, Any>>(bodyString, rootType)
-                
-                if (root["success"] == true) {
-                    Result.success(true)
-                } else {
-                    val message = root["message"]?.toString() ?: "注册失败"
-                    Result.failure(IOException(message))
+                // 尝试解析JSON
+                try {
+                    val rootType = object : TypeToken<Map<String, Any>>() {}.type
+                    val root = gson.fromJson<Map<String, Any>>(bodyString, rootType)
+                    
+                    if (root["success"] == true) {
+                        Result.success(true)
+                    } else {
+                        val message = root["message"]?.toString() ?: "注册失败"
+                        Result.failure(IOException(message))
+                    }
+                } catch (e: Exception) {
+                    // 如果返回的不是JSON（如HTML页面），检查HTTP状态码
+                    if (response.isSuccessful) {
+                        Result.success(true)
+                    } else {
+                        Result.failure(IOException("服务器返回了非预期格式 (HTTP ${response.code})"))
+                    }
                 }
+            } catch (e: java.net.UnknownHostException) {
+                Result.failure(IOException("域名解析失败，请检查服务器地址"))
+            } catch (e: java.net.ConnectException) {
+                Result.failure(IOException("无法连接服务器，请检查地址和端口"))
+            } catch (e: java.net.SocketTimeoutException) {
+                Result.failure(IOException("连接超时，请检查网络"))
             } catch (e: Exception) {
-                Result.failure(e)
+                Result.failure(IOException("注册请求失败：${e.message}"))
             }
         }
     }

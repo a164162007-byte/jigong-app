@@ -297,12 +297,13 @@ class SettingsViewModel(
      */
     /**
      * 注册新用户到云端
+     * 先测试连接，再注册，注册成功后自动登录验证
      */
     fun registerToCloud() {
         viewModelScope.launch {
             val state = _uiState.value
-            val serverUrl = state.cloudServerUrlInput
-            val username = state.cloudUsernameInput
+            val serverUrl = state.cloudServerUrlInput.trim()
+            val username = state.cloudUsernameInput.trim()
             val password = state.cloudPasswordInput
             
             if (serverUrl.isBlank()) {
@@ -330,32 +331,52 @@ class SettingsViewModel(
                 return@launch
             }
             
-            _uiState.update { it.copy(isSyncing = true, syncResult = "正在注册...") }
+            _uiState.update { it.copy(isSyncing = true, syncResult = "正在测试连接...") }
             
             // 先测试连接
             val connectionResult = cloudSyncService.testConnection(serverUrl)
             if (!connectionResult.getOrDefault(false)) {
-                _uiState.update { it.copy(isSyncing = false, syncResult = "连接失败，请检查服务器地址") }
+                val errMsg = connectionResult.exceptionOrNull()?.message ?: "连接失败"
+                _uiState.update { it.copy(isSyncing = false, syncResult = "连接失败：$errMsg") }
                 return@launch
             }
+            
+            _uiState.update { it.copy(syncResult = "正在注册...") }
             
             // 注册
             val registerResult = cloudSyncService.register(serverUrl, username, password)
             
             registerResult.fold(
                 onSuccess = {
-                    // 注册成功，自动保存配置并登录
-                    settingsRepository.updateCloudServerUrl(serverUrl)
-                    settingsRepository.updateCloudUsername(username)
-                    settingsRepository.updateCloudPassword(password)
-                    settingsRepository.updateCloudLoggedIn(true)
-                    settingsRepository.updateCloudLoginTime(System.currentTimeMillis())
-                    _uiState.update { 
-                        it.copy(
-                            isSyncing = false,
-                            syncResult = "注册成功！已自动登录为 $username",
-                            showCloudConfigDialog = false
-                        )
+                    // 注册成功，用新账号登录验证
+                    _uiState.update { it.copy(syncResult = "注册成功，正在验证登录...") }
+                    val loginResult = cloudSyncService.login(serverUrl, username, password)
+                    
+                    if (loginResult.getOrDefault(false)) {
+                        // 登录验证成功，保存配置
+                        settingsRepository.updateCloudServerUrl(serverUrl)
+                        settingsRepository.updateCloudUsername(username)
+                        settingsRepository.updateCloudPassword(password)
+                        settingsRepository.updateCloudLoggedIn(true)
+                        settingsRepository.updateCloudLoginTime(System.currentTimeMillis())
+                        _uiState.update { 
+                            it.copy(
+                                isSyncing = false,
+                                syncResult = "注册成功！已登录为 $username",
+                                showCloudConfigDialog = false
+                            )
+                        }
+                    } else {
+                        // 登录验证失败，仍然保存配置（注册已成功）
+                        settingsRepository.updateCloudServerUrl(serverUrl)
+                        settingsRepository.updateCloudUsername(username)
+                        settingsRepository.updateCloudPassword(password)
+                        _uiState.update { 
+                            it.copy(
+                                isSyncing = false,
+                                syncResult = "注册成功，但登录验证失败，请手动测试连接"
+                            )
+                        }
                     }
                 },
                 onFailure = { error ->
