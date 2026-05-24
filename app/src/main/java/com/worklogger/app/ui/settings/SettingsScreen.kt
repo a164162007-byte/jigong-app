@@ -307,7 +307,8 @@ fun SettingsScreen(
                 onUsernameChange = { viewModel.updateCloudUsername(it) },
                 onPasswordChange = { viewModel.updateCloudPassword(it) },
                 onDismiss = { viewModel.hideCloudConfigDialog() },
-                onSave = { viewModel.saveCloudConfig() }
+                onSave = { viewModel.saveCloudConfig() },
+                onRegister = { viewModel.registerToCloud() }
             )
         }
         
@@ -568,7 +569,8 @@ fun CloudConfigDialog(
     onUsernameChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onDismiss: () -> Unit,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    onRegister: () -> Unit = {}
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
     
@@ -620,8 +622,13 @@ fun CloudConfigDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onSave) {
-                Text("保存")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onRegister) {
+                    Text("注册")
+                }
+                TextButton(onClick = onSave) {
+                    Text("保存")
+                }
             }
         },
         dismissButton = {

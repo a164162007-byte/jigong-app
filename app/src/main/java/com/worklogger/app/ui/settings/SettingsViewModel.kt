@@ -295,6 +295,81 @@ class SettingsViewModel(
     /**
      * 保存云同步配置
      */
+    /**
+     * 注册新用户到云端
+     */
+    fun registerToCloud() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val serverUrl = state.cloudServerUrlInput
+            val username = state.cloudUsernameInput
+            val password = state.cloudPasswordInput
+            
+            if (serverUrl.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请输入服务器地址") }
+                return@launch
+            }
+            
+            if (username.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请输入用户名") }
+                return@launch
+            }
+            
+            if (username.length < 2 || username.length > 20) {
+                _uiState.update { it.copy(syncResult = "用户名长度应为2-20个字符") }
+                return@launch
+            }
+            
+            if (password.isBlank()) {
+                _uiState.update { it.copy(syncResult = "请输入密码") }
+                return@launch
+            }
+            
+            if (password.length < 6) {
+                _uiState.update { it.copy(syncResult = "密码长度至少6个字符") }
+                return@launch
+            }
+            
+            _uiState.update { it.copy(isSyncing = true, syncResult = "正在注册...") }
+            
+            // 先测试连接
+            val connectionResult = cloudSyncService.testConnection(serverUrl)
+            if (!connectionResult.getOrDefault(false)) {
+                _uiState.update { it.copy(isSyncing = false, syncResult = "连接失败，请检查服务器地址") }
+                return@launch
+            }
+            
+            // 注册
+            val registerResult = cloudSyncService.register(serverUrl, username, password)
+            
+            registerResult.fold(
+                onSuccess = {
+                    // 注册成功，自动保存配置并登录
+                    settingsRepository.updateCloudServerUrl(serverUrl)
+                    settingsRepository.updateCloudUsername(username)
+                    settingsRepository.updateCloudPassword(password)
+                    settingsRepository.updateCloudLoggedIn(true)
+                    settingsRepository.updateCloudLoginTime(System.currentTimeMillis())
+                    _uiState.update { 
+                        it.copy(
+                            isSyncing = false,
+                            syncResult = "注册成功！已自动登录为 $username",
+                            showCloudConfigDialog = false
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { 
+                        it.copy(
+                            isSyncing = false,
+                            syncResult = "注册失败：${error.message}"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
     fun saveCloudConfig() {
         viewModelScope.launch {
             val state = _uiState.value
