@@ -12,8 +12,8 @@ android {
         applicationId "com.worklogger.app"
         minSdk 26
         targetSdk 34
-        versionCode 2207
-        versionName "2.1.9.18"
+        versionCode 2208
+        versionName "2.1.9.19"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

@@ -238,7 +238,7 @@ document.getElementById('passwordForm').addEventListener('submit', async functio
 // 用户管理
 async function showUserManagement() {
     try {
-        const res = await fetch('/api/admin/users');
+        const res = await fetch('/api/admin/users', { headers: { 'Accept': 'application/json' } });
         const json = await res.json();
         
         if (json.success) {
@@ -300,7 +300,7 @@ function closeUserModal() {
 // 导出数据
 async function exportData(format) {
     try {
-        const res = await fetch(`/api/export?format=${format}`);
+        const res = await fetch(`/api/export?format=${format}`, { headers: { 'Accept': 'application/json' } });
         const blob = await res.blob();
         
         const url = window.URL.createObjectURL(blob);
@@ -322,7 +322,7 @@ function showTrash() {
 }
 
 // 获取版本信息
-fetch('/api/version').then(r => r.json()).then(data => {
+fetch('/api/version', { headers: { 'Accept': 'application/json' } }).then(r => r.json()).then(data => {
     document.getElementById('versionInfo').textContent = data.version || '未知';
 }).catch(() => {
     document.getElementById('versionInfo').textContent = '获取失败';
@@ -365,6 +365,7 @@ async function uploadUpdate(input) {
     
     try {
         const res = await fetch('/api/update', {
+            headers: { 'Accept': 'application/json' },
             method: 'POST',
             body: formData
         });
@@ -387,7 +388,7 @@ async function clearAllData() {
     if (!confirm('再次确认：删除后数据将无法恢复！')) return;
     
     try {
-        const res = await fetch('/api/clear', { method: 'POST' });
+        const res = await fetch('/api/clear', { method: 'POST', headers: { 'Accept': 'application/json' } });
         const json = await res.json();
         
         alert(json.success ? '数据已清空' : '操作失败');

@@ -567,7 +567,7 @@ class SettingsViewModel(
                 return@launch
             }
             
-            _uiState.update { it.copy(syncResult = "正在修改密码...") }
+            _uiState.update { it.copy(isSyncing = true, syncResult = "正在修改密码...") }
             
             val result = cloudSyncService.changePassword(serverUrl, username, password, currentPassword, newPassword)
             
@@ -576,6 +576,7 @@ class SettingsViewModel(
                     // 密码修改成功后，更新本地存储的云同步密码，否则下次同步会用旧密码失败
                     settingsRepository.updateCloudPassword(newPassword)
                     _uiState.update { it.copy(
+                        isSyncing = false,
                         cloudPasswordInput = newPassword,
                         syncResult = "密码修改成功！",
                         showChangePasswordDialog = false

@@ -319,6 +319,8 @@ fun SettingsScreen(
             ChangePasswordDialog(
                 currentPassword = uiState.currentPasswordInput,
                 newPassword = uiState.newPasswordInput,
+                isSyncing = uiState.isSyncing,
+                statusMessage = uiState.syncResult,
                 onCurrentPasswordChange = { viewModel.updateCurrentPassword(it) },
                 onNewPasswordChange = { viewModel.updateNewPassword(it) },
                 onConfirm = { viewModel.changePassword() },
@@ -678,6 +680,8 @@ fun CloudConfigDialog(
 fun ChangePasswordDialog(
     currentPassword: String,
     newPassword: String,
+    isSyncing: Boolean = false,
+    statusMessage: String? = null,
     onCurrentPasswordChange: (String) -> Unit,
     onNewPasswordChange: (String) -> Unit,
     onConfirm: () -> Unit,
@@ -687,7 +691,7 @@ fun ChangePasswordDialog(
     var newPasswordVisible by remember { mutableStateOf(false) }
     
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isSyncing) onDismiss() },
         icon = { Icon(Icons.Default.Lock, contentDescription = null) },
         title = { Text("修改密码") },
         text = {
@@ -700,6 +704,7 @@ fun ChangePasswordDialog(
                     onValueChange = onCurrentPasswordChange,
                     label = { Text("当前密码") },
                     singleLine = true,
+                    enabled = !isSyncing,
                     visualTransformation = if (currentPasswordVisible) 
                         VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
@@ -719,6 +724,7 @@ fun ChangePasswordDialog(
                     onValueChange = onNewPasswordChange,
                     label = { Text("新密码") },
                     singleLine = true,
+                    enabled = !isSyncing,
                     visualTransformation = if (newPasswordVisible) 
                         VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
@@ -733,15 +739,39 @@ fun ChangePasswordDialog(
                     modifier = Modifier.fillMaxWidth(),
                     supportingText = { Text("新密码长度不能少于6位") }
                 )
+                
+                // 状态提示
+                if (statusMessage != null) {
+                    Text(
+                        text = statusMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if ("成功" in statusMessage) MaterialTheme.colorScheme.primary 
+                               else MaterialTheme.colorScheme.error
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text("确认修改")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (isSyncing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                }
+                TextButton(
+                    onClick = onConfirm,
+                    enabled = !isSyncing
+                ) {
+                    Text("确认修改")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isSyncing
+            ) {
                 Text("取消")
             }
         }
