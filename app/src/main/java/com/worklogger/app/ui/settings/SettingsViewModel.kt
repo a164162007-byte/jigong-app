@@ -421,13 +421,13 @@ class SettingsViewModel(
                 return@launch
             }
             
-            _uiState.update { it.copy(syncResult = "正在测试连接...") }
+            _uiState.update { it.copy(isSyncing = true, syncResult = "正在测试连接...") }
             
             // 测试连接
             val connectionResult = cloudSyncService.testConnection(serverUrl)
             
             if (!connectionResult.getOrDefault(false)) {
-                _uiState.update { it.copy(syncResult = "连接失败，请检查服务器地址") }
+                _uiState.update { it.copy(isSyncing = false, syncResult = "连接失败，请检查服务器地址") }
                 return@launch
             }
             
@@ -441,12 +441,12 @@ class SettingsViewModel(
                 settingsRepository.updateCloudLoggedIn(true)
                 settingsRepository.updateCloudLoginTime(System.currentTimeMillis())
                 _uiState.update { 
-                    it.copy(syncResult = "连接成功！已登录为 \$username") 
+                    it.copy(isSyncing = false, syncResult = "连接成功！已登录为 \$username") 
                 }
             } else {
                 settingsRepository.updateCloudLoggedIn(false)
                 _uiState.update { 
-                    it.copy(syncResult = "登录失败，请检查用户名和密码") 
+                    it.copy(isSyncing = false, syncResult = "登录失败，请检查用户名和密码") 
                 }
             }
         }
@@ -467,13 +467,14 @@ class SettingsViewModel(
                 return@launch
             }
             
-            _uiState.update { it.copy(syncResult = "正在登录...") }
+            _uiState.update { it.copy(isSyncing = true, syncResult = "正在登录...") }
             
             // 测试连接
             val connectionResult = cloudSyncService.testConnection(serverUrl)
             
             if (!connectionResult.getOrDefault(false)) {
-                _uiState.update { it.copy(syncResult = "连接失败，请检查服务器地址") }
+                val errMsg = connectionResult.exceptionOrNull()?.message ?: "连接失败"
+                _uiState.update { it.copy(isSyncing = false, syncResult = "连接失败：$errMsg") }
                 return@launch
             }
             
@@ -484,10 +485,11 @@ class SettingsViewModel(
                 // 保存登录状态
                 settingsRepository.updateCloudLoggedIn(true)
                 settingsRepository.updateCloudLoginTime(System.currentTimeMillis())
-                _uiState.update { it.copy(syncResult = "登录成功！") }
+                _uiState.update { it.copy(isSyncing = false, syncResult = "登录成功！") }
             } else {
                 settingsRepository.updateCloudLoggedIn(false)
-                _uiState.update { it.copy(syncResult = "登录失败，请检查用户名和密码") }
+                val errMsg = loginResult.exceptionOrNull()?.message ?: "登录失败"
+                _uiState.update { it.copy(isSyncing = false, syncResult = "登录失败：$errMsg") }
             }
         }
     }
@@ -584,6 +586,7 @@ class SettingsViewModel(
                 },
                 onFailure = { error ->
                     _uiState.update { it.copy(
+                        isSyncing = false,
                         syncResult = "修改密码失败：${error.message}"
                     ) }
                 }
