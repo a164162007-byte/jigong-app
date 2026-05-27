@@ -215,7 +215,7 @@ document.getElementById('passwordForm').addEventListener('submit', async functio
     try {
         const res = await fetch('/api/user/change-password', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({
                 current_password: document.getElementById('currentPassword').value,
                 new_password: newPass
@@ -282,7 +282,7 @@ async function resetUserPassword(userId) {
     try {
         const res = await fetch('/api/admin/reset-password', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({ user_id: userId })
         });
         
