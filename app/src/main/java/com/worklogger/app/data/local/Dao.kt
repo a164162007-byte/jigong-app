@@ -37,36 +37,19 @@ interface WorkRecordDao {
      * 高效查重查询：按日期+类型+工时+地点匹配
      * 避免全表查询后内存比较，与Docker后端逻辑完全一致
      */
-    @Query("""
-        SELECT COUNT(*) > 0 FROM work_records 
-        WHERE date = :date 
-        AND is_overtime = :isOvertime 
-        AND is_manual = :isManual 
-        AND hours = :hours 
-        AND location = :location 
-        AND deleted_at IS NULL
-    """)
-    suspend fun recordExists(
+    @Query("SELECT COUNT(*) FROM work_records WHERE date = :date AND is_overtime = :isOvertime AND is_manual = :isManual AND hours = :hours AND location = :location AND deleted_at IS NULL")
+    suspend fun countRecordByKey(
         date: String,
         isOvertime: Boolean,
         isManual: Boolean,
         hours: Double,
         location: String
-    ): Boolean
+    ): Int
     
     /**
      * 按日期+类型+工时+地点查找记录（用于upsert）
      */
-    @Query("""
-        SELECT * FROM work_records 
-        WHERE date = :date 
-        AND is_overtime = :isOvertime 
-        AND is_manual = :isManual 
-        AND hours = :hours 
-        AND location = :location 
-        AND deleted_at IS NULL
-        LIMIT 1
-    """)
+    @Query("SELECT * FROM work_records WHERE date = :date AND is_overtime = :isOvertime AND is_manual = :isManual AND hours = :hours AND location = :location AND deleted_at IS NULL LIMIT 1")
     suspend fun findRecordByKey(
         date: String,
         isOvertime: Boolean,
@@ -117,41 +100,25 @@ interface WorkRecordDao {
     /**
      * 高效统计 - 直接用SQL统计标准工天数
      */
-    @Query("""
-        SELECT COUNT(*) FROM work_records 
-        WHERE date >= :startDate AND date < :endDate 
-        AND is_overtime = 0 AND is_manual = 0 AND deleted_at IS NULL
-    """)
+    @Query("SELECT COUNT(*) FROM work_records WHERE date >= :startDate AND date < :endDate AND is_overtime = 0 AND is_manual = 0 AND deleted_at IS NULL")
     suspend fun countStandardDays(startDate: String, endDate: String): Int
     
     /**
      * 高效统计加班总工时
      */
-    @Query("""
-        SELECT SUM(hours) FROM work_records 
-        WHERE date >= :startDate AND date < :endDate 
-        AND is_overtime = 1 AND deleted_at IS NULL
-    """)
+    @Query("SELECT SUM(hours) FROM work_records WHERE date >= :startDate AND date < :endDate AND is_overtime = 1 AND deleted_at IS NULL")
     suspend fun sumOvertimeHours(startDate: String, endDate: String): Double?
     
     /**
      * 高效统计饭补天数
      */
-    @Query("""
-        SELECT COUNT(*) FROM work_records 
-        WHERE date >= :startDate AND date < :endDate 
-        AND meal_subsidy = 1 AND deleted_at IS NULL
-    """)
+    @Query("SELECT COUNT(*) FROM work_records WHERE date >= :startDate AND date < :endDate AND meal_subsidy = 1 AND deleted_at IS NULL")
     suspend fun countMealSubsidyDays(startDate: String, endDate: String): Int
     
     /**
      * 高效统计总工时
      */
-    @Query("""
-        SELECT SUM(hours) FROM work_records 
-        WHERE date >= :startDate AND date < :endDate 
-        AND deleted_at IS NULL
-    """)
+    @Query("SELECT SUM(hours) FROM work_records WHERE date >= :startDate AND date < :endDate AND deleted_at IS NULL")
     suspend fun sumTotalHours(startDate: String, endDate: String): Double?
 }
 
