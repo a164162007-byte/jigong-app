@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 data class HomeUiState(
     val currentMonth: String = DateUtils.currentYearMonth(),
     val totalHours: Double = 0.0,
-    val totalStandardDays: Double = 0.0, // 标准工总数
+    val totalStandardDays: Double = 0.0,
     val totalWage: Double = 0.0,
     val progress: Float = 0f,
     val recentRecords: List<WorkRecord> = emptyList(),
@@ -32,8 +32,8 @@ data class HomeUiState(
     val warningHours: Double = 0.0,
     val showDuplicateWarning: Boolean = false,
     val duplicateDate: String = "",
-    val showQuickCheckInDialog: Boolean = false,  // 一键记工需要输入工地名称
-    // 待保存的记录参数（用于警告对话框确认后继续保存）
+    val showQuickCheckInDialog: Boolean = false,
+    // 待保存的记录参数
     val pendingSaveDate: String = "",
     val pendingSaveHours: Double = 0.0,
     val pendingSaveIsOvertime: Boolean = false,
@@ -60,29 +60,36 @@ class HomeViewModel(
         loadData()
     }
     
+    /**
+     * 🔥 优化：使用combine合并多个Flow，避免多次收集
+     */
     private fun loadData() {
         viewModelScope.launch {
-            // 收集设置
-            settingsRepository.settings.collect { settings ->
-                _uiState.update { it.copy(settings = settings) }
+            // 合并设置和最近地点，一次性更新UI
+            combine(
+                settingsRepository.settings,
+                workRepository.recentLocations
+            ) { settings, locations ->
+                Pair(settings, locations)
+            }.collect { (settings, locations) ->
+                _uiState.update { it.copy(settings = settings, recentLocations = locations) }
                 loadMonthlyData(settings)
-            }
-        }
-        
-        viewModelScope.launch {
-            // 收集最近地点
-            workRepository.recentLocations.collect { locations ->
-                _uiState.update { it.copy(recentLocations = locations) }
             }
         }
     }
     
+    /**
+     * 加载月度数据 - 减少重复计算
+     */
     private suspend fun loadMonthlyData(settings: UserSettings) {
         val currentMonth = _uiState.value.currentMonth
         val startDate = DateUtils.getYearMonthFirstDay(currentMonth)
         val endDate = DateUtils.getYearMonthNextFirstDay(currentMonth)
         
+        // 一次查询本月所有记录，然后统一计算
         val records = workRepository.getRecordsByDateRange(startDate, endDate)
+        
+        // 一次性计算所有统计
         val stats = StatsCalculator.calculateStats(
             records,
             settings.dailyWorkHours,
@@ -96,15 +103,14 @@ class HomeViewModel(
             settings.monthTarget
         )
         
-        // 计算总工时（标准+加班）
+        // 计算总工时和总工资
         val totalHours = records.sumOf { it.hours }
-        
-        // 计算总工资
         val totalWage = stats.wageTotal + stats.mealSubsidyTotal
         
         // 获取最近7天的漏记日期
-        val missedDays = findMissedDays(records, settings)
+        val missedDays = findMissedDays(records)
         
+        // 🔥 优化：一次性更新所有UI状态，减少 recompose
         _uiState.update {
             it.copy(
                 totalHours = totalHours,
@@ -118,8 +124,11 @@ class HomeViewModel(
         }
     }
     
-    private fun findMissedDays(records: List<WorkRecord>, settings: UserSettings): List<String> {
-        val recordedDates = records.map { it.date }.toSet()
+    /**
+     * 查找最近7天漏记日期
+     */
+    private fun findMissedDays(records: List<WorkRecord>): List<String> {
+        val recordedDates = records.map { it.date }.toHashSet()  // 🔥 优化：用HashSet，contains更快
         val missedDays = mutableListOf<String>()
         
         for (i in 1..7) {
@@ -252,7 +261,7 @@ class HomeViewModel(
                     isOvertime = false,
                     location = location,
                     remark = remark,
-                    mealSubsidy = true,  // 标准工必有饭补
+                    mealSubsidy = true,
                     isManual = isManual,
                     updatedAt = System.currentTimeMillis()
                 )
@@ -262,18 +271,18 @@ class HomeViewModel(
                     isOvertime = true,
                     location = location,
                     remark = "",
-                    mealSubsidy = false,  // 加班无饭补
+                    mealSubsidy = false,
                     isManual = false
                 )
                 workRepository.update(updatedStandard)
                 workRepository.insert(newOvertime)
             } else {
-                // 业务规则：标准工(!isOvertime && !isManual)强制mealSubsidy=true，加班(isOvertime)强制mealSubsidy=false
-                // 手动折算的饭补可以自由选择
+                // 业务规则：标准工强制mealSubsidy=true，加班强制mealSubsidy=false
+                // 🔥 与后端逻辑完全一致！
                 val finalMealSubsidy = when {
-                    isOvertime -> false  // 加班没有饭补
-                    !isOvertime && !isManual -> true  // 标准工必须有饭补
-                    else -> mealSubsidy  // 手动折算可以自由选择
+                    isOvertime -> false
+                    !isOvertime && !isManual -> true
+                    else -> mealSubsidy
                 }
                 val updated = editingRecord.copy(
                     date = date,
@@ -289,36 +298,34 @@ class HomeViewModel(
             }
         } else {
             if (shouldSplit) {
-                // 新增模式下的拆分：插入两条记录
-                // 记录1：标准工 dailyWorkHours 小时，有饭补
+                // 新增模式下的拆分
                 val standardRecord = WorkRecord(
                     date = date,
                     hours = dailyWorkHours,
                     isOvertime = false,
                     location = location,
                     remark = remark,
-                    mealSubsidy = true,  // 标准工必有饭补
+                    mealSubsidy = true,
                     isManual = isManual
                 )
-                // 记录2：加班 剩余小时数，无饭补
                 val overtimeRecord = WorkRecord(
                     date = date,
                     hours = hours - dailyWorkHours,
                     isOvertime = true,
                     location = location,
                     remark = "",
-                    mealSubsidy = false,  // 加班无饭补
+                    mealSubsidy = false,
                     isManual = false
                 )
                 workRepository.insert(standardRecord)
                 workRepository.insert(overtimeRecord)
             } else {
-                // 业务规则：标准工(!isOvertime && !isManual)强制mealSubsidy=true，加班(isOvertime)强制mealSubsidy=false
-                // 手动折算的饭补可以自由选择
+                // 业务规则：标准工强制mealSubsidy=true，加班强制mealSubsidy=false
+                // 🔥 与后端逻辑完全一致！
                 val finalMealSubsidy = when {
-                    isOvertime -> false  // 加班没有饭补
-                    !isOvertime && !isManual -> true  // 标准工必须有饭补
-                    else -> mealSubsidy  // 手动折算可以自由选择
+                    isOvertime -> false
+                    !isOvertime && !isManual -> true
+                    else -> mealSubsidy
                 }
                 val newRecord = WorkRecord(
                     date = date,
@@ -342,9 +349,9 @@ class HomeViewModel(
             val settings = _uiState.value.settings
             
             // 保存一键记工的参数
-            pendingQuickCheckInHours = settings.dailyWorkHours  // 标准工时 = 9.0
+            pendingQuickCheckInHours = settings.dailyWorkHours
             pendingQuickCheckInOvertime = false
-            pendingQuickCheckInMealSubsidy = true  // 标准工必须有饭补
+            pendingQuickCheckInMealSubsidy = true
             
             // 始终弹出对话框，强制输入工地名称
             _uiState.update { it.copy(showQuickCheckInDialog = true) }
@@ -378,10 +385,10 @@ class HomeViewModel(
             val record = WorkRecord(
                 date = date,
                 hours = pendingQuickCheckInHours,
-                isOvertime = false,  // 标准工
+                isOvertime = false,
                 location = location.trim(),
                 remark = "",
-                mealSubsidy = true,  // 标准工必须有饭补
+                mealSubsidy = true,
                 isManual = false
             )
             

@@ -24,23 +24,21 @@ class WorkRepository(
     
     /**
      * 记工记录存在判断
-     * 判断条件：日期(date) + 是否加班(isOvertime, isManual)
-     * 用于判断是否重复记工
-     *
+     * 判断条件：日期(date) + 是否加班(isOvertime) + 是否手动(isManual) + 工时(hours) + 地点(location)
+     * 与Docker后端查重逻辑完全一致！
+     * 
      * @param record 记工记录
      * @return true 重复记工，false 新增记工
      */
     suspend fun insertIfNotExists(record: WorkRecord): Boolean {
-        // 构造唯一键（日期+类型+工时+地点），同一天可能有多条加班
-        val key = "${record.date}_${record.isOvertime}_${record.isManual}_${record.hours}_${record.location}"
-        
-        // 查询所有记工记录
-        val allRecords = workRecordDao.getAllRecordsOnce()
-        
-        // 检查是否存在相同记录
-        val exists = allRecords.any { r ->
-            "${r.date}_${r.isOvertime}_${r.isManual}_${r.hours}_${r.location}" == key
-        }
+        // 🔥 优化：用SQL直接查重，不用全表查询后内存比较
+        val exists = workRecordDao.recordExists(
+            date = record.date,
+            isOvertime = record.isOvertime,
+            isManual = record.isManual,
+            hours = record.hours,
+            location = record.location
+        )
         
         if (!exists) {
             workRecordDao.insert(record)
@@ -51,10 +49,7 @@ class WorkRepository(
     
     /**
      * 批量插入不重复的记工记录
-     * 用于批量记工
-     *
-     * @param records 记工记录列表
-     * @return 插入成功数量
+     * 用于批量记工和云同步
      */
     suspend fun insertAllIfNotExists(records: List<WorkRecord>): Int {
         var insertedCount = 0
@@ -100,12 +95,6 @@ class WorkRepository(
         return workRecordDao.getRecordsByDateRange(startDate, endDate)
     }
     
-    suspend fun getRecordsByYear(year: Int): List<WorkRecord> {
-        val startDate = String.format("%04d-01-01", year)
-        val endDate = String.format("%04d-01-01", year + 1)
-        return workRecordDao.getRecordsByDateRange(startDate, endDate)
-    }
-    
     // 回收站操作
     suspend fun moveToTrash(record: WorkRecord) {
         workRecordDao.moveToTrash(record.id.toLong())
@@ -119,6 +108,9 @@ class WorkRepository(
         workRecordDao.permanentlyDelete(record.id.toLong())
     }
     
+    /**
+     * 🔥 优化：直接用SQL清空回收站，不用先查再删
+     */
     suspend fun emptyTrash() {
         workRecordDao.emptyTrash()
     }
@@ -127,7 +119,37 @@ class WorkRepository(
         workRecordDao.moveToTrash(id)
     }
     
-    // 统计相关
+    // ====================== 统计优化：直接用SQL统计 ======================
+    
+    /**
+     * 🔥 优化：用SQL直接统计标准工天数
+     */
+    suspend fun getStandardCount(startDate: String, endDate: String): Int {
+        return workRecordDao.countStandardDays(startDate, endDate)
+    }
+    
+    /**
+     * 🔥 优化：用SQL直接统计加班总工时
+     */
+    suspend fun getOvertimeHours(startDate: String, endDate: String): Double {
+        return workRecordDao.sumOvertimeHours(startDate, endDate) ?: 0.0
+    }
+    
+    /**
+     * 🔥 优化：用SQL直接统计饭补天数
+     */
+    suspend fun getMealSubsidyCount(startDate: String, endDate: String): Int {
+        return workRecordDao.countMealSubsidyDays(startDate, endDate)
+    }
+    
+    /**
+     * 🔥 优化：用SQL直接统计总工时
+     */
+    suspend fun getTotalHours(startDate: String, endDate: String): Double {
+        return workRecordDao.sumTotalHours(startDate, endDate) ?: 0.0
+    }
+    
+    // 兼容旧接口
     suspend fun getStandardCount(records: List<WorkRecord>): Int {
         return records.count { !it.isOvertime && !it.isManual }
     }
@@ -148,8 +170,6 @@ class WorkRepository(
         return workRecordDao.getAllLocations()
     }
     
-    
-    
     suspend fun restoreFromTrashById(id: Int) {
         workRecordDao.restoreFromTrash(id.toLong())
     }
@@ -161,7 +181,6 @@ class WorkRepository(
     val recentLocations: Flow<List<String>> = allRecords.map { records ->
         records.map { it.location }.distinct().filter { it.isNotBlank() }.sorted()
     }
-
     
     suspend fun getAllRecordsOnce(): List<WorkRecord> {
         return workRecordDao.getAllRecordsOnce()
@@ -185,36 +204,28 @@ class WorkRepository(
     }
 
     /**
-     * 清理超过指定时间的回收站记录
-     * 
-     * @param beforeTime 时间戳，删除此时间之前标记为删除的记录
+     * 🔥 优化：直接用SQL清理超过指定时间的回收站记录
      */
     suspend fun cleanOldTrashRecords(beforeTime: Long) {
-        val allRecords = workRecordDao.getAllRecordsOnce()
-        for (record in allRecords) {
-            if (record.isDeleted && record.deletedAt != null && record.deletedAt < beforeTime) {
-                workRecordDao.permanentlyDelete(record.id.toLong())
-            }
-        }
+        workRecordDao.deleteOldTrashRecords(beforeTime)
     }
 
     /**
-     * 从云端同步记录：如果本地已存在同日期同类型的记录则更新，否则插入
-     * 用于云端数据下载时的增量更新
+     * 从云端同步记录：如果本地已存在同日期同类型同工时同地点的记录则更新，否则插入
+     * 🔥 与后端查重逻辑完全一致！
      * 
      * @param record 云端同步下来的记录
      * @return true 表示插入，false 表示更新
      */
     suspend fun upsertFromCloud(record: WorkRecord): Boolean {
-        // 构造唯一键（日期 + 是否加班 + 是否手动折算 + 工时 + 地点）
-        // 与insertIfNotExists保持一致，同一天可能有多条同类型记录（如force_add）
-        val key = "${record.date}_${record.isOvertime}_${record.isManual}_${record.hours}_${record.location}"
-        
-        // 查询本地是否存在相同键的记录
-        val allRecords = workRecordDao.getAllRecordsOnce()
-        val existingRecord = allRecords.find { r ->
-            "${r.date}_${r.isOvertime}_${r.isManual}_${r.hours}_${r.location}" == key
-        }
+        // 🔥 优化：用SQL直接查找，不用全表查询后内存比较
+        val existingRecord = workRecordDao.findRecordByKey(
+            date = record.date,
+            isOvertime = record.isOvertime,
+            isManual = record.isManual,
+            hours = record.hours,
+            location = record.location
+        )
         
         return if (existingRecord != null) {
             // 本地已存在，检查是否有差异需要更新
@@ -237,6 +248,7 @@ class WorkRepository(
 
     /**
      * 修复历史数据：加班记录mealSubsidy应为false，标准工记录mealSubsidy应为true
+     * 🔥 与后端业务规则完全一致！
      */
     suspend fun fixMealSubsidyData(): Int {
         val allRecords = workRecordDao.getAllRecordsOnce()
