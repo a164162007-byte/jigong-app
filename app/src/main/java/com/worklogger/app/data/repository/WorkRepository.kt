@@ -23,24 +23,21 @@ class WorkRepository(
     }
     
     /**
-     * 记工记录存在判断
+     * 🔥 优化：记工记录存在判断 - 用SQL直接查，O(1)性能
      * 判断条件：日期(date) + 是否加班(isOvertime) + 是否手动(isManual) + 工时(hours) + 地点(location)
      * 与Docker后端查重逻辑完全一致！
-     * 
-     * @param record 记工记录
-     * @return true 重复记工，false 新增记工
      */
     suspend fun insertIfNotExists(record: WorkRecord): Boolean {
-        // 先查同一天的记录，然后在内存中比较
-        val sameDayRecords = workRecordDao.getRecordsByDate(record.date)
-        val exists = sameDayRecords.any {
-            it.isOvertime == record.isOvertime &&
-            it.isManual == record.isManual &&
-            it.hours == record.hours &&
-            it.location == record.location
-        }
+        // SQL直接查重，不用加载同一天所有记录
+        val count = workRecordDao.countRecordByKey(
+            date = record.date,
+            isOvertime = record.isOvertime,
+            isManual = record.isManual,
+            hours = record.hours,
+            location = record.location
+        )
         
-        if (!exists) {
+        if (count == 0) {
             workRecordDao.insert(record)
             return true
         }
@@ -116,28 +113,37 @@ class WorkRepository(
         workRecordDao.moveToTrash(id)
     }
     
-    // ====================== 统计：内存计算（DAO优化后续再加） ======================
+    // ====================== 🔥 统计优化：SQL直接统计，O(1)性能 ======================
     
+    /**
+     * 优化：用SQL直接统计标准工天数，不用加载全表
+     */
     suspend fun getStandardCount(startDate: String, endDate: String): Int {
-        val records = workRecordDao.getRecordsByDateRange(startDate, endDate)
-        return records.count { !it.isOvertime && !it.isManual }
+        return workRecordDao.countStandardDays(startDate, endDate)
     }
     
+    /**
+     * 优化：用SQL直接统计加班总工时
+     */
     suspend fun getOvertimeHours(startDate: String, endDate: String): Double {
-        val records = workRecordDao.getRecordsByDateRange(startDate, endDate)
-        return records.filter { it.isOvertime }.sumOf { it.hours }
+        return workRecordDao.sumOvertimeHours(startDate, endDate) ?: 0.0
     }
     
+    /**
+     * 优化：用SQL直接统计饭补天数
+     */
     suspend fun getMealSubsidyCount(startDate: String, endDate: String): Int {
-        val records = workRecordDao.getRecordsByDateRange(startDate, endDate)
-        return records.count { !it.isOvertime && !it.isManual && it.mealSubsidy }
+        return workRecordDao.countMealSubsidyDays(startDate, endDate)
     }
     
+    /**
+     * 优化：用SQL直接统计总工时
+     */
     suspend fun getTotalHours(startDate: String, endDate: String): Double {
-        val records = workRecordDao.getRecordsByDateRange(startDate, endDate)
-        return records.sumOf { it.hours }
+        return workRecordDao.sumTotalHours(startDate, endDate) ?: 0.0
     }
     
+    // 兼容旧接口（基于内存计算）
     suspend fun getStandardCount(records: List<WorkRecord>): Int {
         return records.count { !it.isOvertime && !it.isManual }
     }
@@ -192,27 +198,25 @@ class WorkRepository(
     }
 
     /**
-     * 清理超过指定时间的回收站记录
+     * 🔥 优化：直接用SQL清理旧回收站记录，不用先查全表
      */
     suspend fun cleanOldTrashRecords(beforeTime: Long) {
-        // 先查全表再删（后续优化）
-        val records = workRecordDao.getAllRecordsOnce()
-        records.filter { it.isDeleted && (it.deletedAt ?: 0) < beforeTime }
-            .forEach { workRecordDao.permanentlyDelete(it.id.toLong()) }
+        workRecordDao.deleteOldTrashRecords(beforeTime)
     }
 
     /**
-     * 从云端同步记录：如果本地已存在同日期同类型同工时同地点的记录则更新，否则插入
+     * 🔥 优化：从云端同步记录 - 用SQL直接查找，O(1)性能
+     * 如果本地已存在同日期同类型同工时同地点的记录则更新，否则插入
      */
     suspend fun upsertFromCloud(record: WorkRecord): Boolean {
-        // 先查同一天的记录，然后在内存中比较
-        val sameDayRecords = workRecordDao.getRecordsByDate(record.date)
-        val existingRecord = sameDayRecords.firstOrNull {
-            it.isOvertime == record.isOvertime &&
-            it.isManual == record.isManual &&
-            it.hours == record.hours &&
-            it.location == record.location
-        }
+        // SQL直接查找，不用加载同一天所有记录
+        val existingRecord = workRecordDao.findRecordByKey(
+            date = record.date,
+            isOvertime = record.isOvertime,
+            isManual = record.isManual,
+            hours = record.hours,
+            location = record.location
+        )
         
         return if (existingRecord != null) {
             // 本地已存在，检查是否有差异需要更新
