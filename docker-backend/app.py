@@ -31,6 +31,7 @@ from email import encoders
 from datetime import datetime, timedelta
 from functools import wraps
 from io import BytesIO
+import models
 from models import (
     init_db, create_user, authenticate_user, get_user_by_id,
     get_all_settings, update_setting, update_settings,
