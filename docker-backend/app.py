@@ -18,7 +18,7 @@
 版本: 1.19.0
 """
 
-VERSION = '2.1.9.14'
+VERSION = '2.2.5'
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import os
@@ -716,21 +716,44 @@ def api_get_available_months():
 @login_required
 def api_get_settings():
     """
-    获取所有设置
+    获取所有设置（v2.2.5: 同时返回App端key和后端旧key，确保双向兼容）
     """
     settings = get_all_settings(session['user_id'])
-    return jsonify({'success': True, 'data': settings})
+    # v2.2.5: 生成App端key的映射值，确保App读取时能拿到正确值
+    mapped = dict(settings)
+    key_mapping = {
+        'daily_hours': 'daily_work_hours',
+        'meal_subsidy_per_day': 'meal_subsidy_standard', 
+        'monthly_hours_target': 'month_target',
+    }
+    for old_key, new_key in key_mapping.items():
+        if old_key in settings and new_key not in settings:
+            mapped[new_key] = settings[old_key]
+    return jsonify({'success': True, 'data': mapped})
 
 
 @app.route('/api/settings', methods=['POST'])
 @login_required
 def api_update_settings():
     """
-    批量更新设置
+    批量更新设置（v2.2.5: 写入时同时同步App端key和后端旧key）
     """
     data = request.get_json()
     try:
-        update_settings(session['user_id'], data)
+        # v2.2.5: 双向key同步 - 无论App写哪个key，后端两个key都更新
+        key_sync = {
+            'daily_work_hours': 'daily_hours',
+            'daily_hours': 'daily_work_hours',
+            'meal_subsidy_standard': 'meal_subsidy_per_day',
+            'meal_subsidy_per_day': 'meal_subsidy_standard',
+            'month_target': 'monthly_hours_target',
+            'monthly_hours_target': 'month_target',
+        }
+        sync_data = dict(data)
+        for key, value in data.items():
+            if key in key_sync:
+                sync_data[key_sync[key]] = value
+        update_settings(session['user_id'], sync_data)
         return jsonify({'success': True, 'message': '设置更新成功'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
@@ -740,12 +763,23 @@ def api_update_settings():
 @login_required
 def api_update_single_setting(key):
     """
-    更新单个设置
+    更新单个设置（v2.2.5: 同步写入对应的App端/后端key）
     """
     data = request.get_json()
     value = data.get('value')
     try:
         update_setting(session['user_id'], key, value)
+        # v2.2.5: 同步写入镜像key
+        key_mirror = {
+            'daily_work_hours': 'daily_hours',
+            'daily_hours': 'daily_work_hours',
+            'meal_subsidy_standard': 'meal_subsidy_per_day',
+            'meal_subsidy_per_day': 'meal_subsidy_standard',
+            'month_target': 'monthly_hours_target',
+            'monthly_hours_target': 'month_target',
+        }
+        if key in key_mirror:
+            update_setting(session['user_id'], key_mirror[key], value)
         return jsonify({'success': True, 'message': '设置更新成功'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
@@ -851,6 +885,89 @@ def api_list_backups():
     """
     backups = get_backup_list(session['user_id'])
     return jsonify({'success': True, 'data': backups})
+
+
+@app.route('/api/backup/restore', methods=['POST'])
+@login_required
+def api_restore_backup():
+    """
+    从备份文件恢复数据（v2.2.5新增）
+    支持从指定备份文件还原所有记工记录和设置
+    """
+    data = request.get_json() or {}
+    filename = data.get('filename')
+    
+    if not filename:
+        return jsonify({'success': False, 'message': '请指定备份文件名'})
+    
+    # 安全检查：防止路径穿越
+    if '..' in filename or '/' in filename:
+        return jsonify({'success': False, 'message': '非法文件名'})
+    
+    filepath = os.path.join(app.config.get('BACKUP_DIR', 'backups'), filename)
+    if not os.path.exists(filepath):
+        return jsonify({'success': False, 'message': '备份文件不存在'})
+    
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            backup_data = json.load(f)
+        
+        user_id = session['user_id']
+        records = backup_data.get('records', [])
+        settings = backup_data.get('settings', {})
+        
+        # 恢复设置
+        if settings:
+            # v2.2.5: 同步写入新旧key
+            key_sync = {
+                'daily_work_hours': 'daily_hours',
+                'daily_hours': 'daily_work_hours',
+                'meal_subsidy_standard': 'meal_subsidy_per_day',
+                'meal_subsidy_per_day': 'meal_subsidy_standard',
+                'month_target': 'monthly_hours_target',
+                'monthly_hours_target': 'month_target',
+            }
+            sync_settings = dict(settings)
+            for key, value in settings.items():
+                if key in key_sync:
+                    sync_settings[key_sync[key]] = value
+            update_settings(user_id, sync_settings)
+        
+        # 恢复记录（使用upsert避免重复）
+        restored = 0
+        skipped = 0
+        for record in records:
+            record_type = record.get('record_type', 'standard')
+            work_date = record.get('work_date')
+            location = record.get('location', '')
+            hours = record.get('hours', 0)
+            start_time = record.get('start_time')
+            end_time = record.get('end_time')
+            meal_subsidy = record.get('meal_subsidy', 0)
+            remark = record.get('remark', '')
+            
+            if not work_date:
+                skipped += 1
+                continue
+            
+            # 检查是否已存在
+            existing = check_duplicate_record(user_id, work_date, record_type, hours, location)
+            if existing:
+                skipped += 1
+                continue
+            
+            add_work_record(user_id, record_type, work_date, location,
+                          start_time, end_time, hours, meal_subsidy, remark)
+            restored += 1
+        
+        return jsonify({
+            'success': True, 
+            'message': f'恢复完成：成功{restored}条，跳过{skipped}条（已存在）',
+            'restored': restored,
+            'skipped': skipped
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'恢复失败: {str(e)}'})
 
 
 # ============================================================================

@@ -247,7 +247,11 @@ def init_db():
         ('quick_phrases', '["调休","出差","请假","事假","病假"]'),
         # v2.1.9.15新增设置key（与App对齐）
         ('overtime_work_hours', '8'),
-        ('meal_subsidy_per_day', '30')
+        ('meal_subsidy_per_day', '30'),
+        # v2.2.5: 与App端key完全对齐
+        ('daily_work_hours', '9'),
+        ('month_target', '0'),
+        ('meal_subsidy_standard', '30')
     ]
     for key, value in new_settings:
         try:
@@ -1080,11 +1084,12 @@ def get_statistics(user_id, start_date=None, end_date=None, year=None, month=Non
     """
     # 获取用户设置
     settings = get_all_settings(user_id)
-    daily_hours = float(settings.get('daily_hours', 9))
+    # v2.2.5: 兼容App端key(daily_work_hours)和后端旧key(daily_hours)
+    daily_hours = float(settings.get('daily_work_hours', settings.get('daily_work_hours', settings.get('daily_hours', 9))))
     # 优先使用新key（overtime_work_hours），兼容旧key（overtime_rate）
     overtime_rate = float(settings.get('overtime_work_hours', settings.get('overtime_rate', 8)))
     # 优先使用新key（meal_subsidy_per_day），兼容旧key（meal_subsidy）
-    meal_subsidy_per_day = float(settings.get('meal_subsidy_per_day', settings.get('meal_subsidy', 30)))
+    meal_subsidy_per_day = float(settings.get('meal_subsidy_standard', settings.get('meal_subsidy_per_day', settings.get('meal_subsidy', 30))))
     daily_wage = float(settings.get('daily_wage', 260))
     
     # 获取记录
@@ -1149,7 +1154,7 @@ def get_statistics(user_id, start_date=None, end_date=None, year=None, month=Non
     # 为每个地点计算折算工数
     for loc in location_stats:
         loc_data = location_stats[loc]
-        loc_data['standard_count'] = loc_data['standard']
+        loc_data['standard_days'] = loc_data['standard']  # v2.2.5: 消除standard_count歧义
         loc_data['manual_standard'] = loc_data['manual']
         loc_data['overtime_standard'] = loc_data['overtime'] / overtime_rate if overtime_rate > 0 else 0
         loc_data['standard_equivalent'] = (
@@ -1162,7 +1167,8 @@ def get_statistics(user_id, start_date=None, end_date=None, year=None, month=Non
     overtime_distribution = calculate_overtime_distribution(records, overtime_rate)
     
     return {
-        'standard_count': standard_hours,
+        'standard_hours': round(standard_hours, 2),
+        'standard_days': round(standard_days, 2),  # v2.2.5: 新增折算天数字段
         'overtime_hours': round(overtime_hours, 2),
         'overtime_standard': round(overtime_days, 2),
         'manual_hours': round(manual_hours, 2),
@@ -1548,11 +1554,12 @@ def get_yearly_report(user_id, year):
         dict: 年度统计数据
     """
     settings = get_all_settings(user_id)
-    daily_hours = float(settings.get('daily_hours', 9))
+    # v2.2.5: 兼容App端key(daily_work_hours)和后端旧key(daily_hours)
+    daily_hours = float(settings.get('daily_work_hours', settings.get('daily_work_hours', settings.get('daily_hours', 9))))
     # 优先使用新key（overtime_work_hours），兼容旧key（overtime_rate）
     overtime_rate = float(settings.get('overtime_work_hours', settings.get('overtime_rate', 8)))
     # 优先使用新key（meal_subsidy_per_day），兼容旧key（meal_subsidy）
-    meal_subsidy_per_day = float(settings.get('meal_subsidy_per_day', settings.get('meal_subsidy', 30)))
+    meal_subsidy_per_day = float(settings.get('meal_subsidy_standard', settings.get('meal_subsidy_per_day', settings.get('meal_subsidy', 30))))
     daily_wage = float(settings.get('daily_wage', 260))
     
     # 获取全年记录
