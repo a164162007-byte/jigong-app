@@ -18,7 +18,7 @@
 版本: 1.19.0
 """
 
-VERSION = '2.2.5'
+VERSION = '2.2.6'
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import os
@@ -884,6 +884,14 @@ def api_list_backups():
     列出所有备份记录
     """
     backups = get_backup_list(session['user_id'])
+    # v2.2.6: 补充文件大小信息
+    backup_dir = app.config.get('BACKUP_DIR', 'backups')
+    for b in backups:
+        fpath = os.path.join(backup_dir, b.get('filename', ''))
+        if os.path.exists(fpath):
+            b['file_size'] = os.path.getsize(fpath)
+        else:
+            b['file_size'] = 0
     return jsonify({'success': True, 'data': backups})
 
 

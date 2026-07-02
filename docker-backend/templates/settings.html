@@ -32,21 +32,28 @@
                 <div class="setting-label">每日标准工时</div>
                 <div class="setting-desc">用于计算加班和进度</div>
             </div>
-            <input type="number" class="setting-input" id="dailyHours" value="8" step="0.5">
+            <input type="number" class="setting-input" id="dailyHours" value="9" step="0.5">
+        </div>
+        <div class="setting-item">
+            <div class="setting-info">
+                <div class="setting-label">加班工时标准</div>
+                <div class="setting-desc">加班满多少小时算1个工</div>
+            </div>
+            <input type="number" class="setting-input" id="overtimeWorkHours" value="8" step="0.5">
         </div>
         <div class="setting-item">
             <div class="setting-info">
                 <div class="setting-label">加班费率</div>
-                <div class="setting-desc">每小时加班工资</div>
+                <div class="setting-desc">每小时加班工资（元）</div>
             </div>
-            <input type="number" class="setting-input" id="overtimeRate" value="8">
+            <input type="number" class="setting-input" id="overtimeRate" value="1" step="0.5">
         </div>
         <div class="setting-item">
             <div class="setting-info">
                 <div class="setting-label">饭补标准</div>
-                <div class="setting-desc">每次饭补金额</div>
+                <div class="setting-desc">每个标准工的饭补金额（元）</div>
             </div>
-            <input type="number" class="setting-input" id="mealSubsidy" value="15">
+            <input type="number" class="setting-input" id="mealSubsidy" value="30" step="1">
         </div>
     </div>
     
@@ -55,9 +62,16 @@
         <div class="setting-item">
             <div class="setting-info">
                 <div class="setting-label">日工资标准</div>
-                <div class="setting-desc">用于计算应发工资</div>
+                <div class="setting-desc">每个标准工的工资金额（元）</div>
             </div>
-            <input type="number" class="setting-input" id="dailyWage" value="0">
+            <input type="number" class="setting-input" id="dailyWage" value="260">
+        </div>
+        <div class="setting-item">
+            <div class="setting-info">
+                <div class="setting-label">月工时目标</div>
+                <div class="setting-desc">本月要完成的标准工天数</div>
+            </div>
+            <input type="number" class="setting-input" id="monthTarget" value="22" step="0.5">
         </div>
     </div>
     
@@ -116,7 +130,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     loadSettings();
     
-    // 下班提醒开关
     document.getElementById('offworkReminder').addEventListener('change', function() {
         document.getElementById('offworkTimeRow').style.display = this.checked ? 'flex' : 'none';
     });
@@ -124,21 +137,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadSettings() {
     try {
-        const res = await fetch('/api/settings');
+        const res = await fetch('/api/settings', { headers: { 'Accept': 'application/json' } });
         const json = await res.json();
         
         if (json.success && json.data) {
             const data = json.data;
             
-            document.getElementById('dailyHours').value = data.daily_hours || 8;
-            document.getElementById('overtimeRate').value = data.overtime_rate || 8;
-            document.getElementById('mealSubsidy').value = data.meal_subsidy || 15;
-            document.getElementById('dailyWage').value = data.daily_wage || 0;
+            // 兼容新旧key
+            document.getElementById('dailyHours').value = data.daily_hours || data.daily_work_hours || 9;
+            document.getElementById('overtimeWorkHours').value = data.overtime_work_hours || 8;
+            document.getElementById('overtimeRate').value = data.overtime_rate || 1;
+            document.getElementById('mealSubsidy').value = data.meal_subsidy_per_day || data.meal_subsidy_standard || data.meal_subsidy || 30;
+            document.getElementById('dailyWage').value = data.daily_wage || 260;
+            document.getElementById('monthTarget').value = data.monthly_hours_target || data.month_target || 22;
             document.getElementById('backupInterval').value = data.backup_interval || 7;
             document.getElementById('backupCount').value = data.backup_count || 3;
-            document.getElementById('offworkTime').value = data.offwork_time || '18:00';
+            document.getElementById('offworkTime').value = data.offwork_time || data.off_work_time || '18:00';
             
-            const reminderOn = data.enable_offwork_reminder === '1';
+            const reminderOn = (data.enable_offwork_reminder || data.off_work_reminder) === '1' || 
+                               data.enable_offwork_reminder === true || data.off_work_reminder === true;
             document.getElementById('offworkReminder').checked = reminderOn;
             document.getElementById('offworkTimeRow').style.display = reminderOn ? 'flex' : 'none';
             
@@ -148,26 +165,34 @@ async function loadSettings() {
             } catch (e) {}
         }
     } catch (e) {
-        alert('加载设置失败');
+        console.error('加载设置失败', e);
     }
 }
 
 async function saveSettings() {
     const data = {
+        // 同时写入新旧key，确保双向兼容
         daily_hours: document.getElementById('dailyHours').value,
+        daily_work_hours: document.getElementById('dailyHours').value,
+        overtime_work_hours: document.getElementById('overtimeWorkHours').value,
         overtime_rate: document.getElementById('overtimeRate').value,
-        meal_subsidy: document.getElementById('mealSubsidy').value,
+        meal_subsidy_per_day: document.getElementById('mealSubsidy').value,
+        meal_subsidy_standard: document.getElementById('mealSubsidy').value,
         daily_wage: document.getElementById('dailyWage').value,
+        monthly_hours_target: document.getElementById('monthTarget').value,
+        month_target: document.getElementById('monthTarget').value,
         backup_interval: document.getElementById('backupInterval').value,
         backup_count: document.getElementById('backupCount').value,
         offwork_time: document.getElementById('offworkTime').value,
-        enable_offwork_reminder: document.getElementById('offworkReminder').checked ? '1' : '0'
+        off_work_time: document.getElementById('offworkTime').value,
+        enable_offwork_reminder: document.getElementById('offworkReminder').checked ? '1' : '0',
+        off_work_reminder: document.getElementById('offworkReminder').checked ? '1' : '0'
     };
     
     try {
         const res = await fetch('/api/settings', {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify(data)
         });
         
@@ -187,7 +212,7 @@ async function savePhrases() {
     const text = document.getElementById('quickPhrases').value;
     
     try {
-        JSON.parse(text); // 验证格式
+        JSON.parse(text);
     } catch (e) {
         alert('JSON格式不正确');
         return;
@@ -196,7 +221,7 @@ async function savePhrases() {
     try {
         const res = await fetch('/api/settings', {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({ quick_phrases: text })
         });
         

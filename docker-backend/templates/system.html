@@ -12,6 +12,7 @@
     .system-icon.green { background: #E8F5E9; color: #388E3C; }
     .system-icon.orange { background: #FFF3E0; color: #F57C00; }
     .system-icon.red { background: #FFEBEE; color: #F44336; }
+    .system-icon.purple { background: #F3E5F5; color: #7B1FA2; }
     .system-info { display: flex; align-items: center; flex: 1; }
     .system-label { font-size: 14px; color: #333; }
     .system-desc { font-size: 12px; color: #999; margin-top: 2px; }
@@ -21,6 +22,23 @@
     .admin-title { font-size: 12px; color: #F57C00; font-weight: 500; margin-bottom: 8px; }
     
     .version-info { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+    
+    /* 备份管理样式 */
+    .backup-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .backup-list { max-height: 400px; overflow-y: auto; }
+    .backup-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+    .backup-item:last-child { border-bottom: none; }
+    .backup-info { flex: 1; }
+    .backup-name { font-size: 13px; color: #333; word-break: break-all; }
+    .backup-date { font-size: 11px; color: #999; margin-top: 2px; }
+    .backup-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .backup-actions button { padding: 4px 10px; font-size: 12px; border-radius: 4px; cursor: pointer; border: 1px solid #ddd; background: #fff; }
+    .backup-actions button:hover { background: #f5f5f5; }
+    .backup-actions .btn-restore { color: #F57C00; border-color: #F57C00; }
+    .backup-actions .btn-download { color: #1976D2; border-color: #1976D2; }
+    .backup-actions .btn-delete { color: #F44336; border-color: #F44336; }
+    .backup-empty { text-align: center; padding: 30px; color: #999; font-size: 14px; }
+    .backup-status { font-size: 12px; color: #999; margin-top: 8px; }
 </style>
 {% endblock %}
 
@@ -116,6 +134,21 @@
     </div>
 </div>
 
+<!-- 云备份管理 -->
+<div class="card">
+    <div class="card-title">云备份管理</div>
+    <div class="backup-header">
+        <div style="font-size: 13px; color: #666;">管理云端备份，支持恢复和下载</div>
+        <button class="btn btn-primary" onclick="createBackup()" style="padding: 6px 16px; font-size: 13px;">
+            立即备份
+        </button>
+    </div>
+    <div id="backupList" class="backup-list">
+        <div class="backup-empty">加载中...</div>
+    </div>
+    <div id="backupStatus" class="backup-status"></div>
+</div>
+
 <!-- 危险操作 -->
 <div class="card">
     <div class="card-title">危险操作</div>
@@ -191,7 +224,145 @@
 {% endblock %}
 
 {% block js %}
-// 修改密码
+// 页面加载时获取备份列表
+document.addEventListener('DOMContentLoaded', function() {
+    loadBackupList();
+});
+
+// ========== 云备份管理 ==========
+async function loadBackupList() {
+    try {
+        const res = await fetch('/api/backup/list', { headers: { 'Accept': 'application/json' } });
+        const json = await res.json();
+        
+        if (json.success) {
+            renderBackupList(json.data || []);
+        } else {
+            document.getElementById('backupList').innerHTML = '<div class="backup-empty">加载失败</div>';
+        }
+    } catch (e) {
+        document.getElementById('backupList').innerHTML = '<div class="backup-empty">网络错误</div>';
+    }
+}
+
+function renderBackupList(backups) {
+    const container = document.getElementById('backupList');
+    
+    if (!backups || backups.length === 0) {
+        container.innerHTML = '<div class="backup-empty">暂无备份记录<br><small>点击"立即备份"创建第一个备份</small></div>';
+        return;
+    }
+    
+    let html = '';
+    backups.forEach(function(backup) {
+        const date = backup.backup_date ? new Date(backup.backup_date).toLocaleString('zh-CN') : '未知时间';
+        const filename = backup.filename || '';
+        const sizeKB = backup.file_size ? (backup.file_size / 1024).toFixed(1) + ' KB' : '';
+        
+        html += '<div class="backup-item">';
+        html += '  <div class="backup-info">';
+        html += '    <div class="backup-name">' + escapeHtml(filename) + '</div>';
+        html += '    <div class="backup-date">' + date + (sizeKB ? ' · ' + sizeKB : '') + '</div>';
+        html += '  </div>';
+        html += '  <div class="backup-actions">';
+        html += '    <button class="btn-restore" onclick="restoreBackup(\'' + escapeHtml(filename) + '\')">恢复</button>';
+        html += '    <button class="btn-download" onclick="downloadBackup(\'' + escapeHtml(filename) + '\')">下载</button>';
+        html += '    <button class="btn-delete" onclick="deleteBackup(\'' + escapeHtml(filename) + '\')">删除</button>';
+        html += '  </div>';
+        html += '</div>';
+    });
+    
+    container.innerHTML = html;
+}
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function createBackup() {
+    const statusEl = document.getElementById('backupStatus');
+    statusEl.textContent = '正在创建备份...';
+    
+    try {
+        const res = await fetch('/api/backup', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' }
+        });
+        const json = await res.json();
+        
+        if (json.success) {
+            statusEl.textContent = '备份创建成功';
+            loadBackupList();
+        } else {
+            statusEl.textContent = (json.message || '备份失败');
+        }
+    } catch (e) {
+        statusEl.textContent = '网络错误';
+    }
+    
+    setTimeout(function() { statusEl.textContent = ''; }, 3000);
+}
+
+async function restoreBackup(filename) {
+    if (!confirm('确定要从备份恢复数据吗？\n\n当前数据将与备份合并（重复记录自动跳过）。')) {
+        return;
+    }
+    
+    const statusEl = document.getElementById('backupStatus');
+    statusEl.textContent = '正在恢复备份...';
+    
+    try {
+        const res = await fetch('/api/backup/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ filename: filename })
+        });
+        const json = await res.json();
+        
+        if (json.success) {
+            var restored = (json.data && json.data.restored) || 0;
+            var skipped = (json.data && json.data.skipped) || 0;
+            statusEl.textContent = '恢复成功：新增 ' + restored + ' 条，跳过 ' + skipped + ' 条重复记录';
+        } else {
+            statusEl.textContent = (json.message || '恢复失败');
+        }
+    } catch (e) {
+        statusEl.textContent = '网络错误';
+    }
+    
+    setTimeout(function() { statusEl.textContent = ''; }, 5000);
+}
+
+function downloadBackup(filename) {
+    window.open('/api/backup/download?filename=' + encodeURIComponent(filename), '_blank');
+}
+
+async function deleteBackup(filename) {
+    if (!confirm('确定要删除该备份吗？')) {
+        return;
+    }
+    
+    try {
+        const res = await fetch('/api/backup/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ filename: filename })
+        });
+        const json = await res.json();
+        
+        if (json.success) {
+            loadBackupList();
+        } else {
+            alert(json.message || '删除失败');
+        }
+    } catch (e) {
+        alert('网络错误');
+    }
+}
+
+// ========== 修改密码 ==========
 function showChangePassword() {
     document.getElementById('passwordModal').classList.add('show');
 }
@@ -204,8 +375,8 @@ function closePasswordModal() {
 document.getElementById('passwordForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     
-    const newPass = document.getElementById('newPassword').value;
-    const confirmPass = document.getElementById('confirmNewPassword').value;
+    var newPass = document.getElementById('newPassword').value;
+    var confirmPass = document.getElementById('confirmNewPassword').value;
     
     if (newPass !== confirmPass) {
         alert('两次密码不一致');
@@ -235,7 +406,7 @@ document.getElementById('passwordForm').addEventListener('submit', async functio
     }
 });
 
-// 用户管理
+// ========== 用户管理 ==========
 async function showUserManagement() {
     try {
         const res = await fetch('/api/admin/users', { headers: { 'Accept': 'application/json' } });
@@ -255,22 +426,20 @@ async function showUserManagement() {
 function renderUserList(users) {
     const container = document.getElementById('userList');
     
-    if (users.length === 0) {
+    if (!users || users.length === 0) {
         container.innerHTML = '<div class="empty-state">暂无用户</div>';
         return;
     }
     
     let html = '';
-    users.forEach(user => {
-        html += `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0;">
-                <div>
-                    <div style="font-weight: 500;">${user.username}</div>
-                    <div style="font-size: 12px; color: #999;">注册于 ${user.created_at}</div>
-                </div>
-                <button class="btn btn-outline" onclick="resetUserPassword(${user.id})">重置密码</button>
-            </div>
-        `;
+    users.forEach(function(user) {
+        html += '<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0;">';
+        html += '  <div>';
+        html += '    <div style="font-weight: 500;">' + escapeHtml(user.username) + '</div>';
+        html += '    <div style="font-size: 12px; color: #999;">注册于 ' + escapeHtml(user.created_at || '') + '</div>';
+        html += '  </div>';
+        html += '  <button class="btn btn-outline" onclick="resetUserPassword(' + user.id + ')">重置密码</button>';
+        html += '</div>';
     });
     
     container.innerHTML = html;
@@ -297,16 +466,16 @@ function closeUserModal() {
     document.getElementById('userModal').classList.remove('show');
 }
 
-// 导出数据
+// ========== 导出数据 ==========
 async function exportData(format) {
     try {
-        const res = await fetch(`/api/export?format=${format}`, { headers: { 'Accept': 'application/json' } });
+        const res = await fetch('/api/export?format=' + format, { headers: { 'Accept': 'application/json' } });
         const blob = await res.blob();
         
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `work_records_${new Date().toISOString().split('T')[0]}.${format}`;
+        a.download = 'work_records_' + new Date().toISOString().split('T')[0] + '.' + format;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -316,19 +485,19 @@ async function exportData(format) {
     }
 }
 
-// 回收站
+// ========== 回收站 ==========
 function showTrash() {
     window.location.href = '/trash';
 }
 
-// 获取版本信息
-fetch('/api/version', { headers: { 'Accept': 'application/json' } }).then(r => r.json()).then(data => {
+// ========== 版本信息 ==========
+fetch('/api/version', { headers: { 'Accept': 'application/json' } }).then(function(r) { return r.json(); }).then(function(data) {
     document.getElementById('versionInfo').textContent = data.version || '未知';
-}).catch(() => {
+}).catch(function() {
     document.getElementById('versionInfo').textContent = '获取失败';
 });
 
-// 导入数据
+// ========== 导入数据 ==========
 async function importData(input) {
     const file = input.files[0];
     if (!file) return;
@@ -350,7 +519,7 @@ async function importData(input) {
     input.value = '';
 }
 
-// 在线更新
+// ========== 在线更新 ==========
 async function uploadUpdate(input) {
     const file = input.files[0];
     if (!file) return;
@@ -372,7 +541,7 @@ async function uploadUpdate(input) {
         const json = await res.json();
         if (json.success) {
             alert('更新成功，系统将自动重启...');
-            setTimeout(() => window.location.reload(), 5000);
+            setTimeout(function() { window.location.reload(); }, 5000);
         } else {
             alert(json.message || '更新失败');
         }
@@ -382,7 +551,7 @@ async function uploadUpdate(input) {
     input.value = '';
 }
 
-// 清空数据
+// ========== 清空数据 ==========
 async function clearAllData() {
     if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) return;
     if (!confirm('再次确认：删除后数据将无法恢复！')) return;
