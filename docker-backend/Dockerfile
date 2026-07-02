@@ -20,8 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制应用代码
 COPY . .
 
-# 创建数据目录和备份目录
-RUN mkdir -p /app/data /app/backups
+# 复制并设置入口脚本
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # 暴露端口
 EXPOSE 8080
@@ -30,5 +31,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/api/health || exit 1
 
-# 使用gunicorn启动（生产服务器）
+# 使用入口脚本启动（自动创建目录后启动gunicorn）
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "120", "app:app"]

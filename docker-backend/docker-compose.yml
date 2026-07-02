@@ -2,18 +2,15 @@ version: '3.8'
 
 services:
   work-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/a164162007-byte/jigong-app:latest
     container_name: work-record-app
     restart: unless-stopped
     ports:
       - "8080:8080"
     volumes:
-      # 持久化数据库
-      - ./data:/app/data
-      # 持久化备份
-      - ./backups:/app/backups
+      # 使用 Docker 命名卷，自动创建和管理，无需手动 mkdir
+      - app-data:/app/data
+      - app-backups:/app/backups
     environment:
       - TZ=Asia/Shanghai
       - DATABASE_PATH=/app/data/work_records.db
@@ -24,6 +21,13 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+# Docker 命名卷 - 容器启动时自动创建
+volumes:
+  app-data:
+    name: jigong-data
+  app-backups:
+    name: jigong-backups
 
 networks:
   default:
