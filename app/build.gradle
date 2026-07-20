@@ -23,13 +23,11 @@ android {
 
     signingConfigs {
         release {
-            def keystoreFile = file('../release-keystore.jks')
-            if (keystoreFile.exists()) {
-                storeFile keystoreFile
-                storePassword System.getenv("KEYSTORE_PASSWORD") ?: "li121314"
-                keyAlias System.getenv("KEY_ALIAS") ?: "jigong-key"
-                keyPassword System.getenv("KEY_PASSWORD") ?: "li121314"
-            }
+            def keystoreFile = file('release-keystore.jks')
+            storeFile keystoreFile
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "li121314"
+            keyAlias System.getenv("KEY_ALIAS") ?: "jigong-key"
+            keyPassword System.getenv("KEY_PASSWORD") ?: "li121314"
         }
     }
 
