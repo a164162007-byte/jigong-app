@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
-import com.worklogger.app.data.remote.CloudSyncService
 import com.worklogger.app.model.WorkRecord
 import java.io.OutputStream
 import java.text.SimpleDateFormat
@@ -57,7 +56,7 @@ class DataExporter(private val context: Context) {
     ): String {
         // 转换记录为导出格式
         val exportRecords = records.map { record ->
-            CloudSyncService.workRecordToExportMap(record)
+            workRecordToExportMap(record)
         }
         
         val exportData = ExportData(
@@ -129,6 +128,26 @@ class DataExporter(private val context: Context) {
         } catch (e: Exception) {
             ExportResult.Error(e.message ?: "导出失败")
         }
+    }
+    
+    /**
+     * 将 WorkRecord 转换为导出用的 Map
+     */
+    private fun workRecordToExportMap(record: WorkRecord): Map<String, Any?> {
+        return mapOf(
+            "id" to record.id,
+            "date" to record.date,
+            "hours" to record.hours,
+            "isOvertime" to record.isOvertime,
+            "location" to record.location,
+            "remark" to record.remark,
+            "mealSubsidy" to record.mealSubsidy,
+            "isManual" to record.isManual,
+            "createdAt" to record.createdAt,
+            "updatedAt" to record.updatedAt,
+            "isDeleted" to record.isDeleted,
+            "deletedAt" to record.deletedAt
+        )
     }
     
     /**

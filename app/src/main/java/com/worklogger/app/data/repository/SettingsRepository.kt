@@ -36,27 +36,5 @@ class SettingsRepository(private val settingsDataStore: SettingsDataStore) {
     
     suspend fun updateTheme(theme: String) = settingsDataStore.updateTheme(theme)
     
-    // 云同步配置方法
-    suspend fun updateCloudSyncEnabled(enabled: Boolean) = 
-        settingsDataStore.updateCloudSyncEnabled(enabled)
-    
-    suspend fun updateCloudServerUrl(url: String) = 
-        settingsDataStore.updateCloudServerUrl(url)
-    
-    suspend fun updateCloudUsername(username: String) = 
-        settingsDataStore.updateCloudUsername(username)
-    
-    suspend fun updateCloudPassword(password: String) = 
-        settingsDataStore.updateCloudPassword(password)
-    
-    suspend fun updateCloudLastSyncTime(time: Long) = 
-        settingsDataStore.updateCloudLastSyncTime(time)
-    
-    suspend fun updateCloudLoggedIn(loggedIn: Boolean) = 
-        settingsDataStore.updateCloudLoggedIn(loggedIn)
-    
-    suspend fun updateCloudLoginTime(time: Long) = 
-        settingsDataStore.updateCloudLoginTime(time)
-    
     suspend fun clearAllSettings() = settingsDataStore.clearAll()
 }

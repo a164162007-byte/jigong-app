@@ -1,14 +1,11 @@
 package com.worklogger.app.ui.settings
 
 import android.app.Activity
-import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -20,9 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.focus.onFocusEvent
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.worklogger.app.data.repository.SettingsRepository
@@ -160,66 +155,6 @@ fun SettingsScreen(
             
             Divider()
             
-            // 云同步区域
-            SettingsSection(title = "云同步") {
-                // 云配置
-                SettingsClickableItem(
-                    icon = Icons.Default.Cloud,
-                    title = "云同步设置",
-                    subtitle = if (uiState.settings.cloudServerUrl.isNotBlank())
-                        "已配置: ${uiState.settings.cloudServerUrl}"
-                    else "点击配置云同步",
-                    onClick = { viewModel.showCloudConfigDialog() }
-                )
-                
-                // 测试连接
-                SettingsClickableItem(
-                    icon = Icons.Default.Wifi,
-                    title = "测试连接",
-                    subtitle = "测试与云服务器的连接",
-                    onClick = { viewModel.testCloudConnection() },
-                    enabled = !uiState.isSyncing && uiState.settings.cloudServerUrl.isNotBlank()
-                )
-                
-                // 同步数据
-                SettingsClickableItem(
-                    icon = Icons.Default.Sync,
-                    title = "同步数据",
-                    subtitle = "上传本地 + 下载云端",
-                    onClick = { viewModel.syncCloudData() },
-                    enabled = !uiState.isSyncing && uiState.settings.cloudServerUrl.isNotBlank()
-                )
-                
-                // 修改密码
-                SettingsClickableItem(
-                    icon = Icons.Default.Lock,
-                    title = "修改密码",
-                    subtitle = "修改云端账户密码",
-                    onClick = { viewModel.showChangePasswordDialog() },
-                    enabled = !uiState.isSyncing && uiState.settings.cloudServerUrl.isNotBlank()
-                )
-                
-                // 从云端下载
-                SettingsClickableItem(
-                    icon = Icons.Default.CloudDownload,
-                    title = "从云端下载",
-                    subtitle = "仅下载云端数据到本地",
-                    onClick = { viewModel.downloadFromCloud() },
-                    enabled = !uiState.isSyncing && uiState.settings.cloudServerUrl.isNotBlank()
-                )
-                
-                // 上传到云端
-                SettingsClickableItem(
-                    icon = Icons.Default.CloudUpload,
-                    title = "上传到云端",
-                    subtitle = "仅上传本地数据到云端",
-                    onClick = { viewModel.uploadToCloud() },
-                    enabled = !uiState.isSyncing && uiState.settings.cloudServerUrl.isNotBlank()
-                )
-            }
-            
-            Divider()
-            
             // 系统区域
             SettingsSection(title = "系统") {
                 // 版本信息
@@ -297,36 +232,7 @@ fun SettingsScreen(
             )
         }
         
-        // 云配置对话框
-        if (uiState.showCloudConfigDialog) {
-            CloudConfigDialog(
-                serverUrl = uiState.cloudServerUrlInput,
-                username = uiState.cloudUsernameInput,
-                password = uiState.cloudPasswordInput,
-                isSyncing = uiState.isSyncing,
-                syncResult = uiState.syncResult,
-                onServerUrlChange = { viewModel.updateCloudServerUrl(it) },
-                onUsernameChange = { viewModel.updateCloudUsername(it) },
-                onPasswordChange = { viewModel.updateCloudPassword(it) },
-                onDismiss = { viewModel.hideCloudConfigDialog() },
-                onSave = { viewModel.saveCloudConfig() },
-                onRegister = { viewModel.registerToCloud() }
-            )
-        }
-        
-        // 修改密码对话框
-        if (uiState.showChangePasswordDialog) {
-            ChangePasswordDialog(
-                currentPassword = uiState.currentPasswordInput,
-                newPassword = uiState.newPasswordInput,
-                isSyncing = uiState.isSyncing,
-                statusMessage = uiState.syncResult,
-                onCurrentPasswordChange = { viewModel.updateCurrentPassword(it) },
-                onNewPasswordChange = { viewModel.updateNewPassword(it) },
-                onConfirm = { viewModel.changePassword() },
-                onDismiss = { viewModel.hideChangePasswordDialog() }
-            )
-        }
+
         
         // 导入策略对话框
         if (uiState.showImportStrategyDialog) {
@@ -348,15 +254,6 @@ fun SettingsScreen(
                     }
                 }
             )
-        }
-        
-        // 同步结果Snackbar
-        uiState.syncResult?.let { result ->
-            LaunchedEffect(result) {
-                // 显示Snackbar后自动清除
-                kotlinx.coroutines.delay(3000)
-                viewModel.clearSyncResult()
-            }
         }
         
         // 导入结果Snackbar
@@ -382,15 +279,15 @@ fun SettingsScreen(
             modifier = Modifier.padding(16.dp)
         )
         
-        LaunchedEffect(uiState.syncResult, uiState.importResult, uiState.exportResult) {
-            val result = uiState.syncResult ?: uiState.importResult ?: uiState.exportResult
+        LaunchedEffect(uiState.importResult, uiState.exportResult) {
+            val result = uiState.importResult ?: uiState.exportResult
             result?.let {
                 snackbarHostState.showSnackbar(it)
             }
         }
         
         // 同步加载指示器
-        if (uiState.isSyncing || uiState.isExporting || uiState.isImporting) {
+        if (uiState.isExporting || uiState.isImporting) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -562,220 +459,6 @@ fun NumberSettingItem(
             )
         )
     }
-}
-
-@Composable
-fun CloudConfigDialog(
-    serverUrl: String,
-    username: String,
-    password: String,
-    isSyncing: Boolean = false,
-    syncResult: String? = null,
-    onServerUrlChange: (String) -> Unit,
-    onUsernameChange: (String) -> Unit,
-    onPasswordChange: (String) -> Unit,
-    onDismiss: () -> Unit,
-    onSave: () -> Unit,
-    onRegister: () -> Unit = {}
-) {
-    var passwordVisible by remember { mutableStateOf(false) }
-    
-    AlertDialog(
-        onDismissRequest = { if (!isSyncing) onDismiss() },
-        icon = { Icon(Icons.Default.Cloud, contentDescription = null) },
-        title = { Text("云同步设置") },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = serverUrl,
-                    onValueChange = onServerUrlChange,
-                    label = { Text("服务器地址") },
-                    placeholder = { Text("http://服务器地址:端口") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isSyncing,
-                    supportingText = { Text("Docker后端地址，如 http://192.168.1.100:8080") }
-                )
-                
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = onUsernameChange,
-                    label = { Text("用户名") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isSyncing
-                )
-                
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = onPasswordChange,
-                    label = { Text("密码") },
-                    singleLine = true,
-                    visualTransformation = if (passwordVisible) 
-                        VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Icon(
-                                imageVector = if (passwordVisible) Icons.Default.VisibilityOff 
-                                             else Icons.Default.Visibility,
-                                contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isSyncing
-                )
-                
-                // 状态提示
-                if (syncResult != null) {
-                    Text(
-                        text = syncResult,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (syncResult.contains("成功")) MaterialTheme.colorScheme.primary 
-                               else MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (isSyncing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
-                    )
-                }
-                TextButton(
-                    onClick = onRegister,
-                    enabled = !isSyncing
-                ) {
-                    Text("注册")
-                }
-                TextButton(
-                    onClick = onSave,
-                    enabled = !isSyncing
-                ) {
-                    Text("保存")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                enabled = !isSyncing
-            ) {
-                Text("取消")
-            }
-        }
-    )
-}
-
-/**
- * 修改密码对话框
- */
-@Composable
-fun ChangePasswordDialog(
-    currentPassword: String,
-    newPassword: String,
-    isSyncing: Boolean = false,
-    statusMessage: String? = null,
-    onCurrentPasswordChange: (String) -> Unit,
-    onNewPasswordChange: (String) -> Unit,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    var currentPasswordVisible by remember { mutableStateOf(false) }
-    var newPasswordVisible by remember { mutableStateOf(false) }
-    
-    AlertDialog(
-        onDismissRequest = { if (!isSyncing) onDismiss() },
-        icon = { Icon(Icons.Default.Lock, contentDescription = null) },
-        title = { Text("修改密码") },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedTextField(
-                    value = currentPassword,
-                    onValueChange = onCurrentPasswordChange,
-                    label = { Text("当前密码") },
-                    singleLine = true,
-                    enabled = !isSyncing,
-                    visualTransformation = if (currentPasswordVisible) 
-                        VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { currentPasswordVisible = !currentPasswordVisible }) {
-                            Icon(
-                                imageVector = if (currentPasswordVisible) Icons.Default.VisibilityOff 
-                                             else Icons.Default.Visibility,
-                                contentDescription = if (currentPasswordVisible) "隐藏密码" else "显示密码"
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                OutlinedTextField(
-                    value = newPassword,
-                    onValueChange = onNewPasswordChange,
-                    label = { Text("新密码") },
-                    singleLine = true,
-                    enabled = !isSyncing,
-                    visualTransformation = if (newPasswordVisible) 
-                        VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { newPasswordVisible = !newPasswordVisible }) {
-                            Icon(
-                                imageVector = if (newPasswordVisible) Icons.Default.VisibilityOff 
-                                             else Icons.Default.Visibility,
-                                contentDescription = if (newPasswordVisible) "隐藏密码" else "显示密码"
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    supportingText = { Text("新密码长度不能少于6位") }
-                )
-                
-                // 状态提示
-                if (statusMessage != null) {
-                    Text(
-                        text = statusMessage,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if ("成功" in statusMessage) MaterialTheme.colorScheme.primary 
-                               else MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (isSyncing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
-                    )
-                }
-                TextButton(
-                    onClick = onConfirm,
-                    enabled = !isSyncing
-                ) {
-                    Text("确认修改")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                enabled = !isSyncing
-            ) {
-                Text("取消")
-            }
-        }
-    )
 }
 
 /**

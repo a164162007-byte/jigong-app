@@ -12,8 +12,8 @@ android {
         applicationId "com.worklogger.app"
         minSdk 26
         targetSdk 34
-        versionCode 2260
-        versionName "2.2.6"
+        versionCode 2270
+        versionName "2.2.7"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -21,10 +21,26 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            def keystoreFile = file('../release-keystore.jks')
+            if (keystoreFile.exists()) {
+                storeFile keystoreFile
+                storePassword System.getenv("KEYSTORE_PASSWORD") ?: "li121314"
+                keyAlias System.getenv("KEY_ALIAS") ?: "jigong-key"
+                keyPassword System.getenv("KEY_PASSWORD") ?: "li121314"
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig signingConfigs.release
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
 

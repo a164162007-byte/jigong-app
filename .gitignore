@@ -1,4 +1,9 @@
-# Gradle build cache
+# Keystore (never commit secrets)
+*.jks
+*.keystore
+keystore_base64.txt
+
+# Gradle
 .gradle/
 build/
 local.properties
@@ -6,9 +11,3 @@ local.properties
 # IDE
 .idea/
 *.iml
-.DS_Store
-
-# Python
-__pycache__/
-*.pyc
-*.pyo

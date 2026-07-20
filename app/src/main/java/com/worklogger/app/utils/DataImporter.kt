@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
-import com.worklogger.app.data.remote.CloudSyncService
 import com.worklogger.app.model.WorkRecord
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -24,7 +23,6 @@ import java.util.Locale
 class DataImporter(private val context: Context) {
     
     private val gson = Gson()
-    private val cloudSyncService = CloudSyncService
     
     /**
      * 导入结果

@@ -2,6 +2,7 @@ package com.worklogger.app
 
 import android.app.Activity
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -10,25 +11,29 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Money
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Money
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.worklogger.app.ui.advance.AdvanceSalaryScreen
+import com.worklogger.app.ui.advance.AdvanceSalaryViewModel
+import com.worklogger.app.ui.advance.AdvanceSalaryViewModelFactory
 import com.worklogger.app.ui.calendar.CalendarScreen
 import com.worklogger.app.ui.calendar.CalendarViewModel
 import com.worklogger.app.ui.calendar.CalendarViewModelFactory
@@ -50,7 +55,6 @@ import com.worklogger.app.utils.DateUtils
 import com.worklogger.app.utils.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -63,6 +67,7 @@ sealed class Screen(
 ) {
     object Home : Screen("home", "记工", Icons.Filled.Home, Icons.Outlined.Home)
     object Stats : Screen("stats", "统计", Icons.Outlined.BarChart, Icons.Outlined.BarChart)
+    object AdvanceSalary : Screen("advance_salary", "预支", Icons.Filled.Money, Icons.Outlined.Money)
     object Calendar : Screen("calendar", "日历", Icons.Filled.DateRange, Icons.Outlined.DateRange)
     object Settings : Screen("settings", "设置", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
@@ -95,9 +100,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         
-        // 修复旧数据中加班饭补不一致的问题
-        lifecycleScope.launch(Dispatchers.IO) { (application as WorkLoggerApp).workRepository.fixMealSubsidyData() }
-
         setContent {
             val settings by app.settingsRepository.settings.collectAsStateWithLifecycle(
                 initialValue = com.worklogger.app.model.UserSettings()
@@ -113,24 +115,30 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         // 取消所有协程，防止内存泄漏
         activityJob.cancel()
-        // 立即杀掉进程，释放内存，避免后台驻留
-        android.os.Process.killProcess(android.os.Process.myPid())
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(app: WorkLoggerApp) {
-    // 返回键退出应用并立即销毁进程
-    val backPressedState = remember { mutableStateOf(true) }
-    BackHandler(enabled = backPressedState.value) {
-        (app as? android.app.Activity)?.let { activity ->
-            activity.finishAndRemoveTask()
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val navController = rememberNavController()
+    val screens = listOf(Screen.Home, Screen.Stats, Screen.AdvanceSalary, Screen.Calendar, Screen.Settings)
+    
+    // 双击返回退出应用并强制销毁所有进程
+    var lastBackPressTime by remember { mutableStateOf(0L) }
+    BackHandler {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastBackPressTime < 2000) {
+            // 2秒内再次按返回，退出应用并杀死进程
+            activity?.finish()
             android.os.Process.killProcess(android.os.Process.myPid())
+        } else {
+            lastBackPressTime = currentTime
+            Toast.makeText(context, "再按一次退出应用", Toast.LENGTH_SHORT).show()
         }
     }
-    val navController = rememberNavController()
-    val screens = listOf(Screen.Home, Screen.Stats, Screen.Calendar, Screen.Settings)
     
     Scaffold(
         bottomBar = {
@@ -181,6 +189,13 @@ fun MainScreen(app: WorkLoggerApp) {
                     factory = StatsViewModelFactory(app.workRepository, app.settingsRepository)
                 )
                 StatsScreen(viewModel = viewModel)
+            }
+            
+            composable(Screen.AdvanceSalary.route) {
+                val viewModel = androidx.lifecycle.viewmodel.compose.viewModel<AdvanceSalaryViewModel>(
+                    factory = AdvanceSalaryViewModelFactory(app.workRepository, app.settingsRepository)
+                )
+                AdvanceSalaryScreen(viewModel = viewModel)
             }
             
             composable(Screen.Calendar.route) {

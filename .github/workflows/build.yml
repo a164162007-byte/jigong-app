@@ -27,7 +27,15 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/release-keystore.jks
+
       - name: Build Debug APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Get App Version

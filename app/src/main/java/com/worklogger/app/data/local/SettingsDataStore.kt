@@ -18,7 +18,7 @@ class SettingsDataStore(private val context: Context) {
     companion object {
         private val DAILY_WORK_HOURS = doublePreferencesKey("daily_work_hours")
         private val OVERTIME_RATE = doublePreferencesKey("overtime_rate")
-    private val OVERTIME_WORK_HOURS = doublePreferencesKey("overtime_work_hours")
+        private val OVERTIME_WORK_HOURS = doublePreferencesKey("overtime_work_hours")
         private val DAILY_WAGE = doublePreferencesKey("daily_wage")
         private val MONTH_TARGET = doublePreferencesKey("month_target")
         private val MEAL_SUBSIDY_STANDARD = doublePreferencesKey("meal_subsidy_standard")
@@ -26,14 +26,7 @@ class SettingsDataStore(private val context: Context) {
         private val OFF_WORK_REMINDER = booleanPreferencesKey("off_work_reminder")
         private val MISSED_DAY_REMINDER = booleanPreferencesKey("missed_day_reminder")
         private val THEME = stringPreferencesKey("theme")
-        // 云同步配置键
-        private val CLOUD_SYNC_ENABLED = booleanPreferencesKey("cloud_sync_enabled")
-        private val CLOUD_SERVER_URL = stringPreferencesKey("cloud_server_url")
-        private val CLOUD_USERNAME = stringPreferencesKey("cloud_username")
-        private val CLOUD_PASSWORD = stringPreferencesKey("cloud_password")
-        private val CLOUD_LAST_SYNC_TIME = longPreferencesKey("cloud_last_sync_time")
-    private val CLOUD_LOGGED_IN = booleanPreferencesKey("cloud_logged_in")
-    private val CLOUD_LOGIN_TIME = longPreferencesKey("cloud_login_time")
+        private val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
     }
     
     val settings: Flow<UserSettings> = context.dataStore.data.map { preferences ->
@@ -48,14 +41,7 @@ class SettingsDataStore(private val context: Context) {
             offWorkReminder = preferences[OFF_WORK_REMINDER] ?: true,
             missedDayReminder = preferences[MISSED_DAY_REMINDER] ?: true,
             theme = preferences[THEME] ?: "system",
-            // 云同步配置
-            cloudSyncEnabled = preferences[CLOUD_SYNC_ENABLED] ?: false,
-            cloudServerUrl = preferences[CLOUD_SERVER_URL] ?: "",
-            cloudUsername = preferences[CLOUD_USERNAME] ?: "",
-            cloudPassword = preferences[CLOUD_PASSWORD] ?: "",
-            cloudLastSyncTime = preferences[CLOUD_LAST_SYNC_TIME] ?: 0L,
-            cloudLoggedIn = preferences[CLOUD_LOGGED_IN] ?: false,
-            cloudLoginTime = preferences[CLOUD_LOGIN_TIME] ?: 0L
+            biometricEnabled = preferences[BIOMETRIC_ENABLED] ?: false
         )
     }
     
@@ -71,14 +57,7 @@ class SettingsDataStore(private val context: Context) {
             preferences[OFF_WORK_REMINDER] = settings.offWorkReminder
             preferences[MISSED_DAY_REMINDER] = settings.missedDayReminder
             preferences[THEME] = settings.theme
-            // 云同步配置
-            preferences[CLOUD_SYNC_ENABLED] = settings.cloudSyncEnabled
-            preferences[CLOUD_SERVER_URL] = settings.cloudServerUrl
-            preferences[CLOUD_USERNAME] = settings.cloudUsername
-            preferences[CLOUD_PASSWORD] = settings.cloudPassword
-            preferences[CLOUD_LAST_SYNC_TIME] = settings.cloudLastSyncTime
-            preferences[CLOUD_LOGGED_IN] = settings.cloudLoggedIn
-            preferences[CLOUD_LOGIN_TIME] = settings.cloudLoginTime
+            preferences[BIOMETRIC_ENABLED] = settings.biometricEnabled
         }
     }
     
@@ -120,35 +99,6 @@ class SettingsDataStore(private val context: Context) {
     
     suspend fun updateTheme(theme: String) {
         context.dataStore.edit { it[THEME] = theme }
-    }
-    
-    // 云同步配置方法
-    suspend fun updateCloudSyncEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[CLOUD_SYNC_ENABLED] = enabled }
-    }
-    
-    suspend fun updateCloudServerUrl(url: String) {
-        context.dataStore.edit { it[CLOUD_SERVER_URL] = url }
-    }
-    
-    suspend fun updateCloudUsername(username: String) {
-        context.dataStore.edit { it[CLOUD_USERNAME] = username }
-    }
-    
-    suspend fun updateCloudPassword(password: String) {
-        context.dataStore.edit { it[CLOUD_PASSWORD] = password }
-    }
-    
-    suspend fun updateCloudLastSyncTime(time: Long) {
-        context.dataStore.edit { it[CLOUD_LAST_SYNC_TIME] = time }
-    }
-    
-    suspend fun updateCloudLoggedIn(loggedIn: Boolean) {
-        context.dataStore.edit { it[CLOUD_LOGGED_IN] = loggedIn }
-    }
-    
-    suspend fun updateCloudLoginTime(time: Long) {
-        context.dataStore.edit { it[CLOUD_LOGIN_TIME] = time }
     }
     
     suspend fun clearAll() {

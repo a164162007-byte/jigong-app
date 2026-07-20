@@ -30,7 +30,8 @@ class WorkLoggerApp : Application() {
         // 初始化仓库
         workRepository = WorkRepository(
             database.workRecordDao(),
-            database.quickPhraseDao()
+            database.quickPhraseDao(),
+            database.advanceSalaryDao()
         )
         
         settingsRepository = SettingsRepository(SettingsDataStore(this))

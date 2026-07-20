@@ -17,6 +17,7 @@ val OvertimeLight = Color(0xFFFFBB00)
 val Success = Color(0xFF52C41A)
 val Warning = Color(0xFFFAAD14)
 val Error = Color(0xFFFF4D4F)
+val AdvanceSalary = Color(0xFF722ED1)
 
 // Light Theme Colors
 val BackgroundLight = Color(0xFFF5F5F5)

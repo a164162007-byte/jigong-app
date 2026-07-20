@@ -2,6 +2,8 @@ package com.worklogger.app.data.repository
 
 import com.worklogger.app.data.local.WorkRecordDao
 import com.worklogger.app.data.local.QuickPhraseDao
+import com.worklogger.app.data.local.AdvanceSalaryDao
+import com.worklogger.app.model.AdvanceSalaryRecord
 import com.worklogger.app.model.QuickPhrase
 import com.worklogger.app.model.WorkRecord
 import kotlinx.coroutines.flow.Flow
@@ -10,7 +12,8 @@ import kotlinx.coroutines.flow.map
 
 class WorkRepository(
     private val workRecordDao: WorkRecordDao,
-    private val quickPhraseDao: QuickPhraseDao
+    private val quickPhraseDao: QuickPhraseDao,
+    private val advanceSalaryDao: AdvanceSalaryDao
 ) {
     
     val allRecords: Flow<List<WorkRecord>> = workRecordDao.getAllRecords()
@@ -204,56 +207,53 @@ class WorkRepository(
         workRecordDao.deleteOldTrashRecords(beforeTime)
     }
 
-    /**
-     * 🔥 优化：从云端同步记录 - 用SQL直接查找，O(1)性能
-     * 如果本地已存在同日期同类型同工时同地点的记录则更新，否则插入
-     */
-    suspend fun upsertFromCloud(record: WorkRecord): Boolean {
-        // SQL直接查找，不用加载同一天所有记录
-        val existingRecord = workRecordDao.findRecordByKey(
-            date = record.date,
-            isOvertime = record.isOvertime,
-            isManual = record.isManual,
-            hours = record.hours,
-            location = record.location
-        )
-        
-        return if (existingRecord != null) {
-            // 本地已存在，检查是否有差异需要更新
-            val hasDifference = existingRecord.hours != record.hours ||
-                    existingRecord.location != record.location ||
-                    existingRecord.remark != record.remark ||
-                    existingRecord.mealSubsidy != record.mealSubsidy
-            
-            if (hasDifference) {
-                // 用云端数据覆盖本地记录，保留原始创建时间
-                workRecordDao.update(record.copy(id = existingRecord.id, createdAt = existingRecord.createdAt))
-            }
-            false  // 返回false表示是更新操作
-        } else {
-            // 本地不存在，直接插入
-            workRecordDao.insert(record)
-            true  // 返回true表示是插入操作
-        }
+    // ==================== 预支工资相关 ====================
+    
+    val allAdvanceRecords: Flow<List<AdvanceSalaryRecord>> = advanceSalaryDao.getAllAdvanceRecords()
+    
+    val totalAdvanceAmount: Flow<Double> = advanceSalaryDao.getTotalAdvanceAmount()
+    
+    suspend fun insertAdvanceRecord(record: AdvanceSalaryRecord) {
+        advanceSalaryDao.insert(record)
     }
-
-    /**
-     * 修复历史数据：加班记录mealSubsidy应为false，标准工记录mealSubsidy应为true
-     */
-    suspend fun fixMealSubsidyData(): Int {
-        val allRecords = workRecordDao.getAllRecordsOnce()
-        var fixedCount = 0
-        for (record in allRecords) {
-            val correctMealSubsidy = when {
-                record.isOvertime -> false
-                !record.isOvertime && !record.isManual -> true
-                else -> record.mealSubsidy
-            }
-            if (record.mealSubsidy != correctMealSubsidy) {
-                workRecordDao.update(record.copy(mealSubsidy = correctMealSubsidy, updatedAt = System.currentTimeMillis()))
-                fixedCount++
-            }
+    
+    suspend fun deleteAdvanceRecord(record: AdvanceSalaryRecord) {
+        advanceSalaryDao.delete(record)
+    }
+    
+    suspend fun getAdvanceRecordsByMonth(year: Int, month: Int): List<AdvanceSalaryRecord> {
+        val startDate = String.format("%04d-%02d-01", year, month)
+        val endDate = if (month == 12) {
+            String.format("%04d-01-01", year + 1)
+        } else {
+            String.format("%04d-%02d-01", year, month + 1)
         }
-        return fixedCount
+        return advanceSalaryDao.getAdvanceRecordsByDateRange(startDate, endDate)
+    }
+    
+    suspend fun getAdvanceAmountByMonth(year: Int, month: Int): Double {
+        val startDate = String.format("%04d-%02d-01", year, month)
+        val endDate = if (month == 12) {
+            String.format("%04d-01-01", year + 1)
+        } else {
+            String.format("%04d-%02d-01", year, month + 1)
+        }
+        return advanceSalaryDao.getAdvanceAmountByDateRange(startDate, endDate)
+    }
+    
+    suspend fun getTotalAdvanceAmountOnce(): Double {
+        return advanceSalaryDao.getTotalAdvanceAmountOnce()
+    }
+    
+    suspend fun getAllAdvanceLocations(): List<String> {
+        return advanceSalaryDao.getAllAdvanceLocations()
+    }
+    
+    val recentAdvanceLocations: Flow<List<String>> = allAdvanceRecords.map { records ->
+        records.map { it.location }.filter { it.isNotBlank() }.distinct().sorted()
+    }
+    
+    suspend fun deleteAllAdvanceRecords() {
+        advanceSalaryDao.deleteAll()
     }
 }

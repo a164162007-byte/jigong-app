@@ -1,6 +1,7 @@
 package com.worklogger.app.data.local
 
 import androidx.room.*
+import com.worklogger.app.model.AdvanceSalaryRecord
 import com.worklogger.app.model.QuickPhrase
 import com.worklogger.app.model.WorkRecord
 import kotlinx.coroutines.flow.Flow
@@ -144,4 +145,38 @@ interface QuickPhraseDao {
     
     @Delete
     suspend fun deletePhrase(phrase: QuickPhrase)
+}
+
+@Dao
+interface AdvanceSalaryDao {
+    
+    @Query("SELECT * FROM advance_salary_records ORDER BY date DESC, id DESC")
+    fun getAllAdvanceRecords(): Flow<List<AdvanceSalaryRecord>>
+    
+    @Query("SELECT * FROM advance_salary_records ORDER BY date DESC, id DESC")
+    suspend fun getAllAdvanceRecordsOnce(): List<AdvanceSalaryRecord>
+    
+    @Query("SELECT * FROM advance_salary_records WHERE date >= :startDate AND date < :endDate ORDER BY date DESC, id DESC")
+    suspend fun getAdvanceRecordsByDateRange(startDate: String, endDate: String): List<AdvanceSalaryRecord>
+    
+    @Query("SELECT COALESCE(SUM(amount), 0.0) FROM advance_salary_records")
+    fun getTotalAdvanceAmount(): Flow<Double>
+    
+    @Query("SELECT COALESCE(SUM(amount), 0.0) FROM advance_salary_records")
+    suspend fun getTotalAdvanceAmountOnce(): Double
+    
+    @Query("SELECT COALESCE(SUM(amount), 0.0) FROM advance_salary_records WHERE date >= :startDate AND date < :endDate")
+    suspend fun getAdvanceAmountByDateRange(startDate: String, endDate: String): Double
+    
+    @Query("SELECT DISTINCT location FROM advance_salary_records WHERE location != '' ORDER BY location")
+    suspend fun getAllAdvanceLocations(): List<String>
+    
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(record: AdvanceSalaryRecord)
+    
+    @Delete
+    suspend fun delete(record: AdvanceSalaryRecord)
+    
+    @Query("DELETE FROM advance_salary_records")
+    suspend fun deleteAll()
 }

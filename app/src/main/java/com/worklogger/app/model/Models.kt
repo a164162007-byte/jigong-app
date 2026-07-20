@@ -52,14 +52,7 @@ data class UserSettings(
     val offWorkReminder: Boolean = true,   // 下班提醒开关
     val missedDayReminder: Boolean = true, // 漏记提醒开关
     val theme: String = "system",         // system/light/dark
-    // 云同步配置
-    val cloudSyncEnabled: Boolean = false,  // 云同步开关
-    val cloudServerUrl: String = "",        // 云服务器地址（用户自行配置）
-    val cloudUsername: String = "",         // 云服务器用户名
-    val cloudPassword: String = "",         // 云服务器密码
-    val cloudLastSyncTime: Long = 0L,       // 上次同步时间
-    val cloudLoggedIn: Boolean = false,      // 云端登录状态
-    val cloudLoginTime: Long = 0L            // 登录时间
+    val biometricEnabled: Boolean = false  // 生物识别开关
 )
 
 /**
@@ -105,3 +98,18 @@ enum class RecordColorType {
     MANUAL,      // 青色
     DELETED      // 灰色
 }
+
+/**
+ * 预支工资记录实体
+ */
+@Entity(tableName = "advance_salary_records")
+data class AdvanceSalaryRecord(
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
+    val date: String,          // yyyy-MM-dd
+    val time: String,          // HH:mm
+    val location: String,      // 地点
+    val amount: Double,        // 预支金额
+    val remark: String = "",   // 备注
+    val createdAt: Long = System.currentTimeMillis()
+)
