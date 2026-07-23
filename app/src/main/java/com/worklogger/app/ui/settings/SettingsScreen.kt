@@ -144,6 +144,14 @@ fun SettingsScreen(
                     enabled = !uiState.isImporting
                 )
                 
+                // 粘贴导入
+                SettingsClickableItem(
+                    icon = Icons.Default.ContentPaste,
+                    title = "粘贴导入",
+                    subtitle = "从便签文本批量导入记工记录",
+                    onClick = { viewModel.showBatchImportDialog() }
+                )
+
                 // Excel导出
                 SettingsClickableItem(
                     icon = Icons.Default.TableChart,
@@ -234,6 +242,15 @@ fun SettingsScreen(
         
 
         
+        // 粘贴导入对话框
+        if (uiState.showBatchImportDialog) {
+            BatchImportDialog(
+                dailyWorkHours = uiState.settings.dailyWorkHours,
+                onDismiss = { viewModel.hideBatchImportDialog() },
+                onImport = { entries -> viewModel.performBatchImport(entries) }
+            )
+        }
+
         // 导入策略对话框
         if (uiState.showImportStrategyDialog) {
             AlertDialog(

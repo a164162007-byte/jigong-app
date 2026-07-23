@@ -15,7 +15,9 @@ import com.worklogger.app.model.WorkRecord
 import com.worklogger.app.utils.DataExporter
 import com.worklogger.app.utils.DataImporter
 import com.worklogger.app.utils.DownloadState
+import com.worklogger.app.utils.ParsedWorkEntry
 import com.worklogger.app.utils.ReleaseInfo
+import com.worklogger.app.utils.TextRecordParser
 import com.worklogger.app.utils.UpdateChecker
 import com.worklogger.app.utils.UpdateDownloader
 import kotlinx.coroutines.flow.*
@@ -34,6 +36,8 @@ data class SettingsUiState(
     val importResult: String? = null,
     val showImportStrategyDialog: Boolean = false,
     val pendingImportRecords: List<WorkRecord>? = null,
+    // 粘贴导入状态
+    val showBatchImportDialog: Boolean = false,
     // 应用更新状态
     val isCheckingUpdate: Boolean = false,
     val updateCheckResult: UpdateCheckResult? = null,
@@ -360,7 +364,76 @@ class SettingsViewModel(
     fun clearExportResult() {
         _uiState.update { it.copy(exportResult = null) }
     }
-    
+
+    // ==================== 粘贴导入相关 ====================
+
+    fun showBatchImportDialog() {
+        _uiState.update { it.copy(showBatchImportDialog = true) }
+    }
+
+    fun hideBatchImportDialog() {
+        _uiState.update { it.copy(showBatchImportDialog = false) }
+    }
+
+    fun performBatchImport(entries: List<ParsedWorkEntry>) {
+        viewModelScope.launch {
+            val settings = settingsRepository.settings.first()
+            val dailyWorkHours = settings.dailyWorkHours
+            var importedCount = 0
+            var skippedCount = 0
+
+            try {
+                for (entry in entries) {
+                    val record = if (entry.isOvertime) {
+                        WorkRecord(
+                            date = entry.date,
+                            hours = entry.overtimeHours,
+                            isOvertime = true,
+                            location = entry.location,
+                            remark = "",
+                            mealSubsidy = false,
+                            isManual = false
+                        )
+                    } else {
+                        WorkRecord(
+                            date = entry.date,
+                            hours = dailyWorkHours,
+                            isOvertime = false,
+                            location = entry.location,
+                            remark = "",
+                            mealSubsidy = true,
+                            isManual = false
+                        )
+                    }
+                    if (workRepository.insertIfNotExists(record)) {
+                        importedCount++
+                    } else {
+                        skippedCount++
+                    }
+                }
+
+                val msg = buildString {
+                    append("导入成功！新增${importedCount}条记录")
+                    if (skippedCount > 0) append("，跳过${skippedCount}条重复")
+                }
+
+                _uiState.update {
+                    it.copy(
+                        showBatchImportDialog = false,
+                        importResult = msg
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        showBatchImportDialog = false,
+                        importResult = "导入失败：${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
     // ==================== 快捷短语相关 ====================
     
     fun addPhrase(text: String) {
