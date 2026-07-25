@@ -54,6 +54,16 @@ fun SettingsScreen(
         uri?.let { viewModel.prepareImport(it) }
     }
     
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    // 监听导入/导出结果并显示Snackbar
+    LaunchedEffect(uiState.importResult, uiState.exportResult) {
+        val result = uiState.importResult ?: uiState.exportResult
+        result?.let {
+            snackbarHostState.showSnackbar(it)
+        }
+    }
+    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -63,7 +73,8 @@ fun SettingsScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -280,36 +291,6 @@ fun SettingsScreen(
                     }
                 }
             )
-        }
-        
-        // 导入结果Snackbar
-        uiState.importResult?.let { result ->
-            LaunchedEffect(result) {
-                kotlinx.coroutines.delay(3000)
-                viewModel.clearImportResult()
-            }
-        }
-        
-        // 导出结果Snackbar
-        uiState.exportResult?.let { result ->
-            LaunchedEffect(result) {
-                kotlinx.coroutines.delay(3000)
-                viewModel.clearExportResult()
-            }
-        }
-        
-        // 显示结果Snackbar
-        val snackbarHostState = remember { SnackbarHostState() }
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier.padding(16.dp)
-        )
-        
-        LaunchedEffect(uiState.importResult, uiState.exportResult) {
-            val result = uiState.importResult ?: uiState.exportResult
-            result?.let {
-                snackbarHostState.showSnackbar(it)
-            }
         }
         
         // 同步加载指示器

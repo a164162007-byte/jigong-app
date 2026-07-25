@@ -107,13 +107,21 @@ class HomeViewModel(
         
         val missedDays = findMissedDays(records)
         
+        // 优化：按日期分组取最近7天的完整数据，避免截断破坏分组完整性
+        val recentRecords = if (state.selectedLocation.isNotEmpty()) {
+            records // 地点筛选时显示全部匹配记录
+        } else {
+            val sevenDaysAgo = DateUtils.getDaysAgo(7)
+            records.filter { it.date >= sevenDaysAgo }
+        }
+        
         _uiState.update {
             it.copy(
                 totalHours = totalHours,
                 totalStandardDays = stats.totalStandard,
                 totalWage = totalWage,
                 progress = progress,
-                recentRecords = records.take(20),
+                recentRecords = recentRecords,
                 missedDays = missedDays,
                 isLoading = false
             )

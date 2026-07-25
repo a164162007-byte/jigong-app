@@ -114,18 +114,12 @@ class StatsViewModel(
         
         val sortedDetailRecords = records.sortedByDescending { it.date }
         
-        val allRecords = workRepository.allRecords.first()
-        val recentLocs = allRecords
-            .filter { it.location.isNotEmpty() }
-            .groupBy { it.location }
-            .mapValues { it.value.size }
-            .entries.sortedByDescending { it.value }
-            .take(10)
-            .map { it.key }
+        // 优化：用SQL直接查distinct地点，不用全表加载
+        val recentLocs = workRepository.getAllLocations()
         
-        // 年度月度分解
+        // 年度月度分解 - 优化为一次查询全年数据+内存分组
         val yearBreakdown = if (state.selectedPeriod == "year") {
-            calculateYearMonthlyBreakdown(state.selectedYear, state.selectedLocation, settings)
+            calculateYearMonthlyBreakdownOptimized(state.selectedYear, state.selectedLocation, settings)
         } else {
             emptyList()
         }
@@ -154,14 +148,23 @@ class StatsViewModel(
         }
     }
     
-    private suspend fun calculateYearMonthlyBreakdown(year: String, location: String, settings: UserSettings): List<Pair<String, Double>> {
+    /**
+     * 优化版年度月度分解：一次查询全年数据，在内存中按月分组计算
+     * 避免12次数据库查询
+     */
+    private suspend fun calculateYearMonthlyBreakdownOptimized(year: String, location: String, settings: UserSettings): List<Pair<String, Double>> {
+        val startDate = "$year-01-01"
+        val endDate = "${year.toInt() + 1}-01-01"
+        val allYearRecords = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, location)
+        
+        // 按月分组
+        val groupedByMonth = allYearRecords.groupBy { it.date.substring(0, 7) } // "yyyy-MM"
+        
         val breakdown = mutableListOf<Pair<String, Double>>()
         for (month in 1..12) {
             val yearMonth = String.format("%s-%02d", year, month)
-            val startDate = DateUtils.getYearMonthFirstDay(yearMonth)
-            val endDate = DateUtils.getYearMonthNextFirstDay(yearMonth)
-            val records = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, location)
-            val stats = StatsCalculator.calculateStats(records, settings.dailyWorkHours, settings.overtimeWorkHours, settings.mealSubsidyStandard, settings.dailyWage)
+            val monthRecords = groupedByMonth[yearMonth] ?: emptyList()
+            val stats = StatsCalculator.calculateStats(monthRecords, settings.dailyWorkHours, settings.overtimeWorkHours, settings.mealSubsidyStandard, settings.dailyWage)
             breakdown.add(yearMonth to stats.totalStandard)
         }
         return breakdown
