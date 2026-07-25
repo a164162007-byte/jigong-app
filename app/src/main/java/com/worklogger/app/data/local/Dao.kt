@@ -32,6 +32,9 @@ interface WorkRecordDao {
     @Query("SELECT DISTINCT location FROM work_records WHERE deleted_at IS NULL AND location != '' ORDER BY location")
     suspend fun getAllLocations(): List<String>
     
+    @Query("SELECT * FROM work_records WHERE date >= :startDate AND date < :endDate AND deleted_at IS NULL AND (:location = '' OR location = :location) ORDER BY date DESC, id DESC")
+    suspend fun getRecordsByDateRangeAndLocation(startDate: String, endDate: String, location: String): List<WorkRecord>
+    
     // ====================== 优化查重查询（SQL直接查，O(1)） ======================
     
     /**

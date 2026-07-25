@@ -15,7 +15,7 @@ import com.worklogger.app.model.WorkRecord
  */
 @Database(
     entities = [WorkRecord::class, QuickPhrase::class, AdvanceSalaryRecord::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -47,6 +47,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
         
+        /**
+         * Migration 2 -> 3：新增地点筛选和年度汇总所需的查询支持
+         * 无需修改表结构，仅配合新增的 DAO 查询方法
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 无 schema 变更，仅版本号递增以支持新查询
+            }
+        }
+        
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -54,7 +64,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "work_logger_db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

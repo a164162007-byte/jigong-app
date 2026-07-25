@@ -85,6 +85,14 @@ class WorkRepository(
         return workRecordDao.getRecordsByDateRange(startDate, endDate)
     }
     
+    suspend fun getRecordsByDateRangeAndLocation(startDate: String, endDate: String, location: String): List<WorkRecord> {
+        return if (location.isEmpty()) {
+            workRecordDao.getRecordsByDateRange(startDate, endDate)
+        } else {
+            workRecordDao.getRecordsByDateRangeAndLocation(startDate, endDate, location)
+        }
+    }
+    
     suspend fun getRecordsByMonth(year: Int, month: Int): List<WorkRecord> {
         val startDate = String.format("%04d-%02d-01", year, month)
         val endDate = if (month == 12) {

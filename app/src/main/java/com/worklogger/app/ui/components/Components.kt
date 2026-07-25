@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.*
@@ -162,6 +164,102 @@ fun WorkRecordCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+    }
+}
+
+/**
+ * 记工记录卡片 - 批量选择模式
+ */
+@Composable
+fun WorkRecordCardBatch(
+    record: WorkRecord,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) Primary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 选择图标
+            Icon(
+                imageVector = if (isSelected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                contentDescription = if (isSelected) "已选择" else "未选择",
+                tint = if (isSelected) Primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(24.dp)
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            // 类型指示器
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when {
+                            record.isDeleted -> RecordDeleted
+                            record.isOvertime -> RecordOvertime
+                            record.isManual -> RecordManual
+                            else -> RecordStandard
+                        }
+                    )
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = DateUtils.getRelativeDate(record.date),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = DateUtils.getWeekdayName(record.date),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (record.isOvertime) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(shape = RoundedCornerShape(4.dp), color = RecordOvertime.copy(alpha = 0.2f)) {
+                            Text(text = "加班", style = MaterialTheme.typography.labelSmall, color = RecordOvertime, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = "${record.hours}小时", style = MaterialTheme.typography.bodyMedium,
+                        color = when { record.isOvertime -> RecordOvertime; record.isManual -> RecordManual; else -> MaterialTheme.colorScheme.onSurface })
+                    if (record.location.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = record.location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (record.mealSubsidy && !record.isOvertime) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "🍱", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                if (record.remark.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = record.remark, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
             }
         }
     }

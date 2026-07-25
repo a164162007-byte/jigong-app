@@ -202,6 +202,12 @@ class SettingsViewModel(
         }
     }
     
+    fun updateTheme(theme: String) {
+        viewModelScope.launch {
+            settingsRepository.updateTheme(theme)
+        }
+    }
+    
     fun showClearConfirm() {
         _uiState.update { it.copy(showClearConfirm = true) }
     }

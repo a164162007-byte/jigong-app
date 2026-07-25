@@ -214,4 +214,30 @@ object DateUtils {
         }
         return result.reversed()
     }
+    
+    fun currentYear(): String = String.format("%04d", Calendar.getInstance().get(Calendar.YEAR))
+    
+    fun addYears(year: String, years: Int): String {
+        val y = year.toIntOrNull() ?: return year
+        return String.format("%04d", y + years)
+    }
+    
+    fun getMonthName(month: Int): String {
+        return "${month}月"
+    }
+    
+    fun getDateGroupLabel(date: String): String {
+        val todayStr = today()
+        val yesterdayStr = addDays(todayStr, -1)
+        return when {
+            date == todayStr -> "今天"
+            date == yesterdayStr -> "昨天"
+            else -> {
+                val d = parseDate(date) ?: return date
+                SimpleDateFormat("M月d日 EEEE", Locale.CHINESE).format(d)
+            }
+        }
+    }
+    
+    fun isSameDateGroup(date1: String, date2: String): Boolean = date1 == date2
 }

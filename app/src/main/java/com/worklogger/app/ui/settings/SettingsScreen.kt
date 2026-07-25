@@ -24,7 +24,6 @@ import com.worklogger.app.data.repository.SettingsRepository
 import com.worklogger.app.data.repository.WorkRepository
 import com.worklogger.app.utils.DownloadState
 import com.worklogger.app.utils.ReleaseInfo
-
 import com.worklogger.app.model.QuickPhrase
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,6 +113,16 @@ fun SettingsScreen(
                     value = uiState.settings.monthTarget,
                     onValueChange = { viewModel.updateMonthTarget(it) },
                     suffix = "小时"
+                )
+            }
+            
+            Divider()
+            
+            // 外观设置
+            SettingsSection(title = "外观") {
+                ThemeSettingItem(
+                    currentTheme = uiState.settings.theme,
+                    onThemeSelected = { viewModel.updateTheme(it) }
                 )
             }
             
@@ -545,4 +554,106 @@ fun UpdateDialog(
             }
         }
     )
+}
+
+@Composable
+fun ThemeSettingItem(
+    currentTheme: String,
+    onThemeSelected: (String) -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    
+    val themeLabels = mapOf(
+        "system" to "跟随系统",
+        "light" to "浅色模式",
+        "dark" to "深色模式"
+    )
+    
+    val themeIcons = mapOf(
+        "system" to Icons.Default.SettingsBrightness,
+        "light" to Icons.Default.LightMode,
+        "dark" to Icons.Default.DarkMode
+    )
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showMenu = true }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = themeIcons[currentTheme] ?: Icons.Default.SettingsBrightness,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = "主题模式", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = themeLabels[currentTheme] ?: "跟随系统",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
+    }
+    
+    if (showMenu) {
+        AlertDialog(
+            onDismissRequest = { showMenu = false },
+            icon = { Icon(Icons.Default.Palette, contentDescription = null) },
+            title = { Text("选择主题") },
+            text = {
+                Column {
+                    themeLabels.forEach { (key, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onThemeSelected(key)
+                                    showMenu = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = themeIcons[key]!!,
+                                contentDescription = null,
+                                tint = if (currentTheme == key) MaterialTheme.colorScheme.primary 
+                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (currentTheme == key) MaterialTheme.colorScheme.primary 
+                                        else MaterialTheme.colorScheme.onSurface
+                            )
+                            if (currentTheme == key) {
+                                Spacer(modifier = Modifier.weight(1f))
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMenu = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 }

@@ -6,6 +6,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,7 +38,6 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale.CHINA) }
     
-    // 页面恢复时自动刷新数据
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -41,61 +46,100 @@ fun HomeScreen(
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    
+    // 按日期分组记录
+    val groupedRecords = remember(uiState.recentRecords) {
+        uiState.recentRecords.groupBy { it.date }
     }
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
+            if (uiState.isBatchMode) {
+                // 批量模式顶栏
+                TopAppBar(
+                    title = {
                         Text(
-                            text = "记工",
-                            style = MaterialTheme.typography.titleLarge,
+                            text = "已选择 ${uiState.selectedRecordIds.size} 条",
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
-                        Text(
-                            text = "${DateUtils.getYear()}.${DateUtils.getMonth()}月",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.exitBatchMode() }) {
+                            Icon(Icons.Default.Close, contentDescription = "退出选择")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.selectAllRecords() }) {
+                            Icon(Icons.Default.SelectAll, contentDescription = "全选")
+                        }
+                        IconButton(
+                            onClick = { viewModel.showBatchDeleteConfirm() },
+                            enabled = uiState.selectedRecordIds.isNotEmpty()
+                        ) {
+                            Icon(Icons.Default.DeleteSweep, contentDescription = "批量删除",
+                                tint = if (uiState.selectedRecordIds.isNotEmpty()) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Primary.copy(alpha = 0.1f)
+                    )
                 )
-            )
+            } else {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(text = "记工", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "${DateUtils.getYear()}.${DateUtils.getMonth()}月",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    actions = {
+                        // 批量选择按钮
+                        if (uiState.recentRecords.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.enterBatchMode() }) {
+                                Icon(Icons.Default.FilterList, contentDescription = "批量操作")
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
+            }
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { viewModel.showAddDialog() },
-                containerColor = Primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("记工")
+            if (!uiState.isBatchMode) {
+                ExtendedFloatingActionButton(
+                    onClick = { viewModel.showAddDialog() },
+                    containerColor = Primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("记工")
+                }
             }
         }
     ) { padding ->
         if (uiState.isLoading) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator()
             }
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // 统计卡片
                 item {
@@ -120,99 +164,67 @@ fun HomeScreen(
                 }
                 
                 // 一键记工按钮
-                item {
-                    Card(
-                        onClick = { viewModel.quickCheckIn() },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Primary
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+                if (!uiState.isBatchMode) {
+                    item {
+                        Card(
+                            onClick = { viewModel.quickCheckIn() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Primary)
                         ) {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "一键记工 (${uiState.settings.dailyWorkHours.toInt()}小时)",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "一键记工 (${uiState.settings.dailyWorkHours.toInt()}小时)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
                         }
                     }
                 }
                 
                 // 进度条
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
+                if (!uiState.isBatchMode) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Text(
-                                text = "月目标进度",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            ProgressBar(
-                                progress = uiState.progress,
-                                label = "已完成 ${uiState.settings.monthTarget} 天中的 ${String.format("%.1f", uiState.settings.monthTarget * uiState.progress)} 天"
-                            )
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(text = "月目标进度", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                ProgressBar(
+                                    progress = uiState.progress,
+                                    label = "已完成 ${uiState.settings.monthTarget} 天中的 ${String.format("%.1f", uiState.settings.monthTarget * uiState.progress)} 天"
+                                )
+                            }
                         }
                     }
                 }
                 
                 // 漏记提醒
-                if (uiState.missedDays.isNotEmpty()) {
+                if (uiState.missedDays.isNotEmpty() && !uiState.isBatchMode) {
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-                            )
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
                         ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Warning,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "最近7天漏记",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Text(text = "最近7天漏记", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                 }
                                 Spacer(modifier = Modifier.height(12.dp))
-                                LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     items(uiState.missedDays) { date ->
-                                        MissedDayChip(
-                                            date = date,
-                                            onClick = { viewModel.showAddDialog() }
-                                        )
+                                        MissedDayChip(date = date, onClick = { viewModel.showAddDialog() })
                                     }
                                 }
                             }
@@ -220,40 +232,70 @@ fun HomeScreen(
                     }
                 }
                 
+                // 地点筛选
+                if (uiState.allLocations.isNotEmpty()) {
+                    item {
+                        LocationFilterChips(
+                            locations = uiState.allLocations,
+                            selectedLocation = uiState.selectedLocation,
+                            onLocationSelected = { viewModel.selectLocation(it) }
+                        )
+                    }
+                }
+                
                 // 最近记录标题
                 item {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "最近记录",
+                        text = if (uiState.selectedLocation.isNotEmpty()) "「${uiState.selectedLocation}」记录" else "最近记录",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
                 }
                 
-                // 最近记录列表
+                // 最近记录列表（按日期分组）
                 if (uiState.recentRecords.isEmpty()) {
                     item {
                         EmptyState(
-                            message = "暂无记录，点击下方按钮记工",
+                            message = if (uiState.selectedLocation.isNotEmpty()) "该地点暂无记录" else "暂无记录，点击下方按钮记工",
                             modifier = Modifier.padding(vertical = 32.dp)
                         )
                     }
-                } else {
+                } else if (uiState.isBatchMode) {
+                    // 批量选择模式
                     items(
                         items = uiState.recentRecords,
                         key = { it.id }
                     ) { record ->
-                        WorkRecordCard(
+                        WorkRecordCardBatch(
                             record = record,
-                            onClick = { viewModel.showEditDialog(record) },
-                            onDelete = { viewModel.showDeleteConfirm(record.id) }
+                            isSelected = uiState.selectedRecordIds.contains(record.id),
+                            onClick = { viewModel.toggleRecordSelection(record.id) },
+                            onLongClick = {}
                         )
+                    }
+                } else {
+                    // 正常模式 - 按日期分组
+                    groupedRecords.forEach { (date, records) ->
+                        // 日期分组标题
+                        item(key = "header_$date") {
+                            DateGroupHeader(date = date)
+                        }
+                        // 该日期下的记录
+                        items(
+                            items = records,
+                            key = { it.id }
+                        ) { record ->
+                            WorkRecordCard(
+                                record = record,
+                                onClick = { viewModel.showEditDialog(record) },
+                                onDelete = { viewModel.showDeleteConfirm(record.id) }
+                            )
+                        }
                     }
                 }
                 
-                // 底部间距
-                item {
-                    Spacer(modifier = Modifier.height(80.dp))
-                }
+                item { Spacer(modifier = Modifier.height(80.dp)) }
             }
         }
         
@@ -274,9 +316,7 @@ fun HomeScreen(
             QuickCheckInDialog(
                 recentLocations = uiState.recentLocations,
                 onDismiss = { viewModel.cancelQuickCheckIn() },
-                onConfirm = { location, date ->
-                    viewModel.confirmQuickCheckIn(location, date)
-                }
+                onConfirm = { location, date -> viewModel.confirmQuickCheckIn(location, date) }
             )
         }
         
@@ -288,6 +328,18 @@ fun HomeScreen(
                 confirmText = "删除",
                 onConfirm = { viewModel.confirmDelete() },
                 onDismiss = { viewModel.hideDeleteConfirm() },
+                isDangerous = true
+            )
+        }
+        
+        // 批量删除确认
+        if (uiState.showBatchDeleteConfirm) {
+            ConfirmDialog(
+                title = "批量删除",
+                message = "确定要删除选中的 ${uiState.selectedRecordIds.size} 条记录吗？删除后可从回收站恢复。",
+                confirmText = "删除",
+                onConfirm = { viewModel.confirmBatchDelete() },
+                onDismiss = { viewModel.hideBatchDeleteConfirm() },
                 isDangerous = true
             )
         }
@@ -311,6 +363,60 @@ fun HomeScreen(
                 confirmText = "继续添加",
                 onConfirm = { viewModel.confirmDuplicateAnyway() },
                 onDismiss = { viewModel.cancelDuplicateWarning() }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DateGroupHeader(date: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = DateUtils.getDateGroupLabel(date),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = DateUtils.getWeekdayName(date),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Divider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+    }
+}
+
+@Composable
+private fun LocationFilterChips(
+    locations: List<String>,
+    selectedLocation: String,
+    onLocationSelected: (String) -> Unit
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            FilterChip(
+                selected = selectedLocation.isEmpty(),
+                onClick = { onLocationSelected("") },
+                label = { Text("全部") },
+                leadingIcon = if (selectedLocation.isEmpty()) {
+                    { Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                } else null
+            )
+        }
+        items(locations) { location ->
+            FilterChip(
+                selected = selectedLocation == location,
+                onClick = { onLocationSelected(location) },
+                label = { Text(location) }
             )
         }
     }

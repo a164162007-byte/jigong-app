@@ -14,8 +14,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class StatsUiState(
-    val selectedPeriod: String = "month", // month, year, custom
+    val selectedPeriod: String = "month", // month, year
     val selectedYearMonth: String = DateUtils.currentYearMonth(),
+    val selectedYear: String = DateUtils.currentYear(),
     val currentStats: StatsData = StatsData(),
     val previousStats: StatsData = StatsData(),
     val comparison: Triple<Double, Double, Double> = Triple(0.0, 0.0, 0.0),
@@ -23,11 +24,20 @@ data class StatsUiState(
     val totalOvertimeDays: Double = 0.0,
     val totalOvertimeHours: Double = 0.0,
     val recentRecords: List<WorkRecord> = emptyList(),
-    val monthlyDetailRecords: List<WorkRecord> = emptyList(), // 月度详细记录（按日期倒序）
+    val monthlyDetailRecords: List<WorkRecord> = emptyList(),
     val settings: UserSettings = UserSettings(),
-    val monthlyTrend: List<Pair<String, Double>> = emptyList(), // yearMonth -> totalHours
-    val locationDistribution: Map<String, Int> = emptyMap(), // location -> count
+    val monthlyTrend: List<Pair<String, Double>> = emptyList(),
+    val locationDistribution: Map<String, Int> = emptyMap(),
     val recentLocations: List<String> = emptyList(),
+    // 年度月度分解数据
+    val yearMonthlyBreakdown: List<Pair<String, Double>> = emptyList(), // month -> totalDays
+    // 地点筛选
+    val selectedLocation: String = "",
+    val allLocations: List<String> = emptyList(),
+    // 批量操作
+    val isBatchMode: Boolean = false,
+    val selectedRecordIds: Set<Int> = emptySet(),
+    val showBatchDeleteConfirm: Boolean = false,
     // 编辑功能
     val showEditDialog: Boolean = false,
     val editingRecord: WorkRecord? = null,
@@ -62,64 +72,48 @@ class StatsViewModel(
         val state = _uiState.value
         val settings = state.settings
         
-        // 获取当前期间数据
         val (startDate, endDate) = when (state.selectedPeriod) {
-            "month" -> {
-                val ym = state.selectedYearMonth
-                Pair(DateUtils.getYearMonthFirstDay(ym), DateUtils.getYearMonthNextFirstDay(ym))
-            }
             "year" -> {
-                val year = DateUtils.getYear(state.selectedYearMonth)
-                Pair("$year-01-01", "${year + 1}-01-01")
+                val year = state.selectedYear
+                Pair("$year-01-01", "${year.toInt() + 1}-01-01")
             }
             else -> {
                 val ym = state.selectedYearMonth
-                Pair(DateUtils.getYearMonthFirstDay(ym), DateUtils.getYearMonthLastDay(ym))
+                Pair(DateUtils.getYearMonthFirstDay(ym), DateUtils.getYearMonthNextFirstDay(ym))
             }
         }
         
-        val records = workRepository.getRecordsByDateRange(startDate, endDate)
+        // 使用地点筛选
+        val records = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, state.selectedLocation)
         val stats = StatsCalculator.calculateStats(
-            records,
-            settings.dailyWorkHours,
-            settings.overtimeWorkHours,
-            settings.mealSubsidyStandard,
-            settings.dailyWage
+            records, settings.dailyWorkHours, settings.overtimeWorkHours,
+            settings.mealSubsidyStandard, settings.dailyWage
         )
         
-        val overtimeDist = StatsCalculator.calculateOvertimeDistribution(
-            records,
-            settings.overtimeWorkHours
-        )
-        
+        val overtimeDist = StatsCalculator.calculateOvertimeDistribution(records, settings.overtimeWorkHours)
         val (totalDays, totalHours) = StatsCalculator.calculateTotalOvertime(records)
         
-        // 计算上月数据用于对比
-        val prevYearMonth = DateUtils.addMonths(state.selectedYearMonth, -1)
-        val prevStartDate = DateUtils.getYearMonthFirstDay(prevYearMonth)
-        val prevEndDate = DateUtils.getYearMonthNextFirstDay(prevYearMonth)
-        
-        val prevRecords = workRepository.getRecordsByDateRange(prevStartDate, prevEndDate)
-        val prevStats = StatsCalculator.calculateStats(
-            prevRecords,
-            settings.dailyWorkHours,
-            settings.overtimeWorkHours,
-            settings.mealSubsidyStandard,
-            settings.dailyWage
-        )
+        // 计算上期数据
+        val prevStats: StatsData
+        if (state.selectedPeriod == "year") {
+            val prevYear = (state.selectedYear.toInt() - 1).toString()
+            val prevRecords = workRepository.getRecordsByDateRangeAndLocation("$prevYear-01-01", "${prevYear.toInt() + 1}-01-01", state.selectedLocation)
+            prevStats = StatsCalculator.calculateStats(prevRecords, settings.dailyWorkHours, settings.overtimeWorkHours, settings.mealSubsidyStandard, settings.dailyWage)
+        } else {
+            val prevYearMonth = DateUtils.addMonths(state.selectedYearMonth, -1)
+            val prevRecords = workRepository.getRecordsByDateRangeAndLocation(DateUtils.getYearMonthFirstDay(prevYearMonth), DateUtils.getYearMonthNextFirstDay(prevYearMonth), state.selectedLocation)
+            prevStats = StatsCalculator.calculateStats(prevRecords, settings.dailyWorkHours, settings.overtimeWorkHours, settings.mealSubsidyStandard, settings.dailyWage)
+        }
         
         val comparison = StatsCalculator.calculateComparison(stats, prevStats)
         
-        // 计算地点分布
         val locationDist = records
             .filter { !it.isOvertime }
             .groupBy { it.location.ifEmpty { "未填写" } }
             .mapValues { it.value.size }
         
-        // 计算月度详细记录（按日期倒序）
         val sortedDetailRecords = records.sortedByDescending { it.date }
         
-        // 获取最近工地列表
         val allRecords = workRepository.allRecords.first()
         val recentLocs = allRecords
             .filter { it.location.isNotEmpty() }
@@ -128,6 +122,13 @@ class StatsViewModel(
             .entries.sortedByDescending { it.value }
             .take(10)
             .map { it.key }
+        
+        // 年度月度分解
+        val yearBreakdown = if (state.selectedPeriod == "year") {
+            calculateYearMonthlyBreakdown(state.selectedYear, state.selectedLocation, settings)
+        } else {
+            emptyList()
+        }
         
         _uiState.update {
             it.copy(
@@ -141,12 +142,29 @@ class StatsViewModel(
                 monthlyDetailRecords = sortedDetailRecords,
                 locationDistribution = locationDist,
                 recentLocations = recentLocs,
+                allLocations = recentLocs,
+                yearMonthlyBreakdown = yearBreakdown,
                 isLoading = false
             )
         }
         
-        // 加载近6个月趋势
-        loadMonthlyTrend()
+        // 加载近6个月趋势（仅月视图）
+        if (state.selectedPeriod == "month") {
+            loadMonthlyTrend()
+        }
+    }
+    
+    private suspend fun calculateYearMonthlyBreakdown(year: String, location: String, settings: UserSettings): List<Pair<String, Double>> {
+        val breakdown = mutableListOf<Pair<String, Double>>()
+        for (month in 1..12) {
+            val yearMonth = String.format("%s-%02d", year, month)
+            val startDate = DateUtils.getYearMonthFirstDay(yearMonth)
+            val endDate = DateUtils.getYearMonthNextFirstDay(yearMonth)
+            val records = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, location)
+            val stats = StatsCalculator.calculateStats(records, settings.dailyWorkHours, settings.overtimeWorkHours, settings.mealSubsidyStandard, settings.dailyWage)
+            breakdown.add(yearMonth to stats.totalStandard)
+        }
+        return breakdown
     }
     
     private suspend fun loadMonthlyTrend() {
@@ -154,34 +172,31 @@ class StatsViewModel(
         val settings = _uiState.value.settings
         
         val trend = mutableListOf<Pair<String, Double>>()
-        
         for (ym in yearMonths) {
             val startDate = DateUtils.getYearMonthFirstDay(ym)
             val endDate = DateUtils.getYearMonthNextFirstDay(ym)
-            
-            val records = workRepository.getRecordsByDateRange(startDate, endDate)
-            
-            val stats = StatsCalculator.calculateStats(
-                records,
-                settings.dailyWorkHours,
-                settings.overtimeWorkHours,
-                settings.mealSubsidyStandard,
-                settings.dailyWage
-            )
-            
+            val records = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, _uiState.value.selectedLocation)
+            val stats = StatsCalculator.calculateStats(records, settings.dailyWorkHours, settings.overtimeWorkHours, settings.mealSubsidyStandard, settings.dailyWage)
             trend.add(ym to stats.totalStandard)
         }
         
         _uiState.update { it.copy(monthlyTrend = trend) }
     }
     
-    fun setSelectedPeriod(period: String) {
-        _uiState.update { it.copy(selectedPeriod = period, isLoading = true) }
+    // ========== 视图模式切换 ==========
+    
+    fun setViewMode(mode: String) {
+        _uiState.update { it.copy(selectedPeriod = mode, isLoading = true) }
         viewModelScope.launch { loadStatsData() }
     }
     
     fun setSelectedYearMonth(yearMonth: String) {
         _uiState.update { it.copy(selectedYearMonth = yearMonth, isLoading = true) }
+        viewModelScope.launch { loadStatsData() }
+    }
+    
+    fun setSelectedYear(year: String) {
+        _uiState.update { it.copy(selectedYear = year, isLoading = true) }
         viewModelScope.launch { loadStatsData() }
     }
     
@@ -192,9 +207,80 @@ class StatsViewModel(
     
     fun nextMonth() {
         val newYearMonth = DateUtils.addMonths(_uiState.value.selectedYearMonth, 1)
-        // 不能超过当前月份
         if (newYearMonth <= DateUtils.currentYearMonth()) {
             setSelectedYearMonth(newYearMonth)
+        }
+    }
+    
+    fun previousYear() {
+        val newYear = DateUtils.addYears(_uiState.value.selectedYear, -1)
+        setSelectedYear(newYear)
+    }
+    
+    fun nextYear() {
+        val newYear = DateUtils.addYears(_uiState.value.selectedYear, 1)
+        if (newYear <= DateUtils.currentYear()) {
+            setSelectedYear(newYear)
+        }
+    }
+    
+    // ========== 地点筛选 ==========
+    
+    fun selectLocation(location: String) {
+        _uiState.update {
+            it.copy(
+                selectedLocation = if (it.selectedLocation == location) "" else location,
+                isLoading = true,
+                isBatchMode = false,
+                selectedRecordIds = emptySet()
+            )
+        }
+        viewModelScope.launch { loadStatsData() }
+    }
+    
+    // ========== 批量操作 ==========
+    
+    fun enterBatchMode() {
+        _uiState.update { it.copy(isBatchMode = true, selectedRecordIds = emptySet()) }
+    }
+    
+    fun exitBatchMode() {
+        _uiState.update { it.copy(isBatchMode = false, selectedRecordIds = emptySet()) }
+    }
+    
+    fun toggleRecordSelection(recordId: Int) {
+        _uiState.update { state ->
+            val newSet = state.selectedRecordIds.toMutableSet()
+            if (newSet.contains(recordId)) newSet.remove(recordId) else newSet.add(recordId)
+            state.copy(selectedRecordIds = newSet)
+        }
+    }
+    
+    fun selectAllRecords() {
+        val allIds = _uiState.value.monthlyDetailRecords.map { it.id }.toSet()
+        _uiState.update { it.copy(selectedRecordIds = allIds) }
+    }
+    
+    fun showBatchDeleteConfirm() {
+        if (_uiState.value.selectedRecordIds.isNotEmpty()) {
+            _uiState.update { it.copy(showBatchDeleteConfirm = true) }
+        }
+    }
+    
+    fun hideBatchDeleteConfirm() {
+        _uiState.update { it.copy(showBatchDeleteConfirm = false) }
+    }
+    
+    fun confirmBatchDelete() {
+        viewModelScope.launch {
+            val ids = _uiState.value.selectedRecordIds
+            for (id in ids) {
+                workRepository.moveToTrash(workRepository.getRecordById(id.toLong()) ?: continue)
+            }
+            _uiState.update {
+                it.copy(showBatchDeleteConfirm = false, isBatchMode = false, selectedRecordIds = emptySet())
+            }
+            refresh()
         }
     }
     
@@ -218,46 +304,16 @@ class StatsViewModel(
         viewModelScope.launch {
             val settings = settingsRepository.settings.first()
             val dailyWorkHours = settings.dailyWorkHours
-            
-            // 自动拆分：当 hours > dailyWorkHours 且类型是标准工或手动折算时，拆分为两条记录
             val shouldSplit = !isOvertime && hours > dailyWorkHours
             
             if (shouldSplit) {
-                // 更新标准工记录
-                val updatedStandard = record.copy(
-                    date = date,
-                    hours = dailyWorkHours,
-                    isOvertime = false,
-                    location = location,
-                    remark = remark,
-                    mealSubsidy = true,  // 标准工必有饭补
-                    isManual = isManual,
-                    updatedAt = System.currentTimeMillis()
-                )
-                // 新增加班记录
-                val newOvertime = WorkRecord(
-                    date = date,
-                    hours = hours - dailyWorkHours,
-                    isOvertime = true,
-                    location = location,
-                    remark = "",
-                    mealSubsidy = false,  // 加班无饭补
-                    isManual = false
-                )
+                val updatedStandard = record.copy(date = date, hours = dailyWorkHours, isOvertime = false, location = location, remark = remark, mealSubsidy = true, isManual = isManual, updatedAt = System.currentTimeMillis())
+                val newOvertime = WorkRecord(date = date, hours = hours - dailyWorkHours, isOvertime = true, location = location, remark = "", mealSubsidy = false, isManual = false)
                 workRepository.update(updatedStandard)
                 workRepository.insert(newOvertime)
             } else {
-                // 业务规则：标准工强制mealSubsidy=true，加班强制mealSubsidy=false，手动折算可自由选择
-                val finalMealSubsidy = when {
-                    isOvertime -> false
-                    !isOvertime && !isManual -> true
-                    else -> mealSubsidy
-                }
-                val updatedRecord = record.copy(
-                    date = date, hours = hours, isOvertime = isOvertime,
-                    location = location, remark = remark, mealSubsidy = finalMealSubsidy,
-                    isManual = isManual, updatedAt = System.currentTimeMillis()
-                )
+                val finalMealSubsidy = when { isOvertime -> false; !isOvertime && !isManual -> true; else -> mealSubsidy }
+                val updatedRecord = record.copy(date = date, hours = hours, isOvertime = isOvertime, location = location, remark = remark, mealSubsidy = finalMealSubsidy, isManual = isManual, updatedAt = System.currentTimeMillis())
                 workRepository.update(updatedRecord)
             }
             hideEditDialog()
