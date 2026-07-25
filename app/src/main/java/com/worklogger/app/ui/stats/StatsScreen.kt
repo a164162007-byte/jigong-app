@@ -297,6 +297,7 @@ fun StatsScreen(
 
 // ========== 视图模式切换 ==========
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ViewModeToggle(selectedPeriod: String, onModeSelected: (String) -> Unit) {
     Row(
@@ -338,6 +339,7 @@ private fun YearSelector(year: String, onPrevious: () -> Unit, onNext: () -> Uni
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LocationFilterChips(locations: List<String>, selectedLocation: String, onLocationSelected: (String) -> Unit) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

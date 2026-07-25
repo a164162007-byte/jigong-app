@@ -393,6 +393,7 @@ private fun DateGroupHeader(date: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LocationFilterChips(
     locations: List<String>,
