@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.worklogger.app.data.repository.SettingsRepository
 import com.worklogger.app.data.repository.WorkRepository
+import com.worklogger.app.model.MonthlySalarySettlement
 import com.worklogger.app.model.StatsData
 import com.worklogger.app.model.UserSettings
 import com.worklogger.app.model.WorkRecord
@@ -44,6 +45,11 @@ data class StatsUiState(
     // 删除功能
     val showDeleteConfirm: Boolean = false,
     val deletingRecord: WorkRecord? = null,
+    // 工资结算单
+    val showSettlementDialog: Boolean = false,
+    val settlement: MonthlySalarySettlement? = null,
+    val settlementLocation: String = "",       // 结算单地点筛选
+    val currentPeriodAdvance: Double = 0.0,    // 当前周期预支合计
     val isLoading: Boolean = true
 )
 
@@ -114,6 +120,12 @@ class StatsViewModel(
         
         val sortedDetailRecords = records.sortedByDescending { it.date }
         
+        // 计算当前周期预支合计
+        val allAdvance = workRepository.allAdvanceRecords.first()
+        val periodAdvance = allAdvance
+            .filter { it.date >= startDate && it.date < endDate }
+            .sumOf { it.amount }
+        
         // 优化：用SQL直接查distinct地点，不用全表加载
         val recentLocs = workRepository.getAllLocations()
         
@@ -138,6 +150,7 @@ class StatsViewModel(
                 recentLocations = recentLocs,
                 allLocations = recentLocs,
                 yearMonthlyBreakdown = yearBreakdown,
+                currentPeriodAdvance = periodAdvance,
                 isLoading = false
             )
         }
@@ -341,6 +354,60 @@ class StatsViewModel(
             hideDeleteConfirm()
             refresh()
         }
+    }
+    
+    // ========== 工资结算单 ==========
+    
+    fun showSettlementSheet() {
+        _uiState.update { it.copy(showSettlementDialog = true) }
+        viewModelScope.launch { loadSettlement() }
+    }
+    
+    fun hideSettlementSheet() {
+        _uiState.update { it.copy(showSettlementDialog = false) }
+    }
+    
+    fun updateSettlementLocation(location: String) {
+        _uiState.update { it.copy(settlementLocation = location) }
+        viewModelScope.launch { loadSettlement() }
+    }
+    
+    private suspend fun loadSettlement() {
+        val state = _uiState.value
+        val settings = state.settings
+        val location = state.settlementLocation
+        
+        val (startDate, endDate, yearMonth) = when (state.selectedPeriod) {
+            "year" -> {
+                val year = state.selectedYear
+                Triple("$year-01-01", "${year.toInt() + 1}-01-01", "${year}年")
+            }
+            else -> {
+                val ym = state.selectedYearMonth
+                Triple(DateUtils.getYearMonthFirstDay(ym), DateUtils.getYearMonthNextFirstDay(ym), ym)
+            }
+        }
+        
+        val records = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, location)
+        
+        // 计算同期预支合计（年视图=全年，月视图=当月）
+        val allAdvance = workRepository.allAdvanceRecords.first()
+        val totalAdvance = allAdvance
+            .filter { it.date >= startDate && it.date < endDate }
+            .sumOf { it.amount }
+        
+        val settlement = StatsCalculator.calculateSettlement(
+            records = records,
+            advanceAmount = totalAdvance,
+            yearMonth = yearMonth,
+            location = location,
+            dailyWorkHours = settings.dailyWorkHours,
+            overtimeWorkHours = settings.overtimeWorkHours,
+            mealSubsidyStandard = settings.mealSubsidyStandard,
+            dailyWage = settings.dailyWage
+        )
+        
+        _uiState.update { it.copy(settlement = settlement) }
     }
 }
 

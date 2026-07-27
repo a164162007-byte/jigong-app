@@ -113,3 +113,21 @@ data class AdvanceSalaryRecord(
     val remark: String = "",   // 备注
     val createdAt: Long = System.currentTimeMillis()
 )
+
+/**
+ * 月度工资结算单数据类
+ */
+data class MonthlySalarySettlement(
+    val yearMonth: String,                    // yyyy-MM 或 "yyyy年"
+    val location: String = "",                // 地点筛选（空=全部）
+    val standardDays: Double = 0.0,           // 标准工天数
+    val standardWage: Double = 0.0,           // 标准工工资
+    val overtimeDays: Double = 0.0,           // 加班折算天数
+    val overtimeWage: Double = 0.0,           // 加班工资
+    val manualDays: Double = 0.0,             // 手动折算天数
+    val manualWage: Double = 0.0,             // 手动折算工资
+    val mealSubsidyTotal: Double = 0.0,       // 饭补合计
+    val totalEarning: Double = 0.0,           // 应发合计
+    val advanceAmount: Double = 0.0,          // 预支合计
+    val netPayable: Double = 0.0              // 实发工资
+)

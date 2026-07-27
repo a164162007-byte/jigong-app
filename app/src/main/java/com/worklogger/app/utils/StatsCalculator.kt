@@ -232,4 +232,50 @@ object StatsCalculator {
                        (previousStats.wageTotal + previousStats.mealSubsidyTotal)
         return Triple(hoursDiff, mealDiff, wageDiff)
     }
+    
+    /**
+     * 生成月度工资结算单
+     *
+     * @param records 记工记录（已按日期范围和地点筛选）
+     * @param advanceAmount 同期预支工资金额
+     * @param yearMonth 显示标题（如 "2026-07" 或 "2026年"）
+     * @param location 地点筛选名称
+     * @param dailyWorkHours 标准工时
+     * @param overtimeWorkHours 加班工时标准
+     * @param mealSubsidyStandard 饭补标准
+     * @param dailyWage 日工资标准
+     */
+    fun calculateSettlement(
+        records: List<WorkRecord>,
+        advanceAmount: Double,
+        yearMonth: String,
+        location: String,
+        dailyWorkHours: Double,
+        overtimeWorkHours: Double,
+        mealSubsidyStandard: Double,
+        dailyWage: Double
+    ): com.worklogger.app.model.MonthlySalarySettlement {
+        val stats = calculateStats(records, dailyWorkHours, overtimeWorkHours, mealSubsidyStandard, dailyWage)
+
+        val standardWage = stats.standardDays * dailyWage
+        val overtimeWage = stats.overtimeDays * dailyWage
+        val manualWage = stats.manualDays * dailyWage
+        val totalEarning = stats.wageTotal + stats.mealSubsidyTotal
+        val netPayable = totalEarning - advanceAmount
+
+        return com.worklogger.app.model.MonthlySalarySettlement(
+            yearMonth = yearMonth,
+            location = location,
+            standardDays = stats.standardDays,
+            standardWage = standardWage,
+            overtimeDays = stats.overtimeDays,
+            overtimeWage = overtimeWage,
+            manualDays = stats.manualDays,
+            manualWage = manualWage,
+            mealSubsidyTotal = stats.mealSubsidyTotal,
+            totalEarning = totalEarning,
+            advanceAmount = advanceAmount,
+            netPayable = netPayable
+        )
+    }
 }

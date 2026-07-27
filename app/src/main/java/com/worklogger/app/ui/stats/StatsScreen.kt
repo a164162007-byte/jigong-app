@@ -179,6 +179,56 @@ fun StatsScreen(
                     }
                 }
                 
+                // 工资结算单入口
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.Receipt,
+                                    contentDescription = null,
+                                    tint = Primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = "工资结算", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(text = "应发", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(text = currencyFormat.format(uiState.currentStats.wageTotal + uiState.currentStats.mealSubsidyTotal), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = "预支", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(text = "-${currencyFormat.format(uiState.currentPeriodAdvance)}", style = MaterialTheme.typography.bodyMedium, color = Decrease)
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(text = "实发", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    val netPayable = uiState.currentStats.wageTotal + uiState.currentStats.mealSubsidyTotal - uiState.currentPeriodAdvance
+                                    Text(text = currencyFormat.format(netPayable), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Primary)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = { viewModel.showSettlementSheet() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("查看结算明细")
+                            }
+                        }
+                    }
+                }
+                
                 // 数据对比
                 item {
                     ComparisonCard(
@@ -291,6 +341,17 @@ fun StatsScreen(
         if (uiState.showBatchDeleteConfirm) {
             ConfirmDialog(title = "批量删除", message = "确定要删除选中的 ${uiState.selectedRecordIds.size} 条记录吗？删除后可从回收站恢复。",
                 confirmText = "删除", onConfirm = { viewModel.confirmBatchDelete() }, onDismiss = { viewModel.hideBatchDeleteConfirm() }, isDangerous = true)
+        }
+        
+        // 工资结算单弹窗
+        if (uiState.showSettlementDialog) {
+            SettlementDialog(
+                settlement = uiState.settlement,
+                allLocations = uiState.allLocations,
+                selectedLocation = uiState.settlementLocation,
+                onLocationChange = { viewModel.updateSettlementLocation(it) },
+                onDismiss = { viewModel.hideSettlementSheet() }
+            )
         }
     }
 }
