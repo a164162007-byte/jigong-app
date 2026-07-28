@@ -59,7 +59,7 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
     
     private var pendingQuickCheckInHours: Double = 0.0
-    private var pendingQuickCheckInOvertime: Boolean = false
+    private var pendingQuickCheckInOvertimeHours: Double = 0.0
     private var pendingQuickCheckInMealSubsidy: Boolean = false
     
     init {
@@ -238,6 +238,9 @@ class HomeViewModel(
         isManual: Boolean
     ) {
         viewModelScope.launch {
+            // 普通记工流程重置一键记工的加班缓存
+            pendingQuickCheckInOvertimeHours = 0.0
+            
             if (hours > 12 || hours < 1) {
                 _uiState.update { 
                     it.copy(
@@ -302,6 +305,18 @@ class HomeViewModel(
                 state.pendingSaveLocation, state.pendingSaveRemark, state.pendingSaveMealSubsidy,
                 state.pendingSaveIsManual
             )
+            
+            // 一键记工带加班时，重复确认后也补上加班记录（无饭补）
+            if (pendingQuickCheckInOvertimeHours > 0) {
+                val overtimeRecord = WorkRecord(
+                    date = state.pendingSaveDate, hours = pendingQuickCheckInOvertimeHours,
+                    isOvertime = true, location = state.pendingSaveLocation,
+                    remark = "", mealSubsidy = false, isManual = false
+                )
+                workRepository.insert(overtimeRecord)
+                pendingQuickCheckInOvertimeHours = 0.0
+                refreshData()
+            }
         }
     }
     
@@ -385,14 +400,17 @@ class HomeViewModel(
         viewModelScope.launch {
             val settings = _uiState.value.settings
             pendingQuickCheckInHours = settings.dailyWorkHours
-            pendingQuickCheckInOvertime = false
+            pendingQuickCheckInOvertimeHours = 0.0
             pendingQuickCheckInMealSubsidy = true
             _uiState.update { it.copy(showQuickCheckInDialog = true) }
         }
     }
     
-    fun confirmQuickCheckIn(location: String, date: String = DateUtils.today()) {
+    fun confirmQuickCheckIn(location: String, date: String = DateUtils.today(), overtimeHours: Double = 0.0) {
         viewModelScope.launch {
+            // 保存加班工时到类变量，供重复确认时使用
+            pendingQuickCheckInOvertimeHours = overtimeHours
+            
             val existingRecords = workRepository.getRecordsByDate(date)
             if (existingRecords.isNotEmpty()) {
                 _uiState.update {
@@ -412,18 +430,32 @@ class HomeViewModel(
                 return@launch
             }
             
-            val record = WorkRecord(
-                date = date, hours = pendingQuickCheckInHours, isOvertime = false,
-                location = location.trim(), remark = "", mealSubsidy = true, isManual = false
-            )
+            val settings = settingsRepository.settings.first()
+            val trimmedLocation = location.trim()
             
-            workRepository.insert(record)
+            // 创建标准工记录（有饭补）
+            val standardRecord = WorkRecord(
+                date = date, hours = settings.dailyWorkHours, isOvertime = false,
+                location = trimmedLocation, remark = "", mealSubsidy = true, isManual = false
+            )
+            workRepository.insert(standardRecord)
+            
+            // 如果有加班工时，创建加班记录（无饭补）
+            if (overtimeHours > 0) {
+                val overtimeRecord = WorkRecord(
+                    date = date, hours = overtimeHours, isOvertime = true,
+                    location = trimmedLocation, remark = "", mealSubsidy = false, isManual = false
+                )
+                workRepository.insert(overtimeRecord)
+            }
+            
             _uiState.update { it.copy(showQuickCheckInDialog = false) }
             refreshData()
         }
     }
     
     fun cancelQuickCheckIn() {
+        pendingQuickCheckInOvertimeHours = 0.0
         _uiState.update { it.copy(showQuickCheckInDialog = false) }
     }
     

@@ -332,13 +332,14 @@ fun AddRecordDialog(
 fun QuickCheckInDialog(
     recentLocations: List<String> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (location: String, date: String) -> Unit
+    onConfirm: (location: String, date: String, overtimeHours: Double) -> Unit
 ) {
     var location by remember { mutableStateOf("") }
     var locationError by remember { mutableStateOf(false) }
     var showLocationDropdown by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf(DateUtils.today()) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var overtimeHours by remember { mutableStateOf("0") }
     
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = DateUtils.parseDate(selectedDate)?.time ?: System.currentTimeMillis()
@@ -434,6 +435,29 @@ fun QuickCheckInDialog(
                     }
                 }
                 
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 加班工时输入
+                OutlinedTextField(
+                    value = overtimeHours,
+                    onValueChange = { overtimeHours = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("加班工时（可选）") },
+                    placeholder = { Text("0") },
+                    suffix = { Text("小时") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                val overtimeValue = overtimeHours.toDoubleOrNull() ?: 0.0
+                if (overtimeValue > 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "加班无饭补，仅标准工计入饭补",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RecordOvertime
+                    )
+                }
+                
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Row(
@@ -449,7 +473,7 @@ fun QuickCheckInDialog(
                                 locationError = true
                                 return@Button
                             }
-                            onConfirm(location.trim(), selectedDate)
+                            onConfirm(location.trim(), selectedDate, overtimeValue)
                         },
                         modifier = Modifier.weight(1f)
                     ) {
