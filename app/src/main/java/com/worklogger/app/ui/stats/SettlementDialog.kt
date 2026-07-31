@@ -2,11 +2,9 @@ package com.worklogger.app.ui.stats
 
 import android.content.Intent
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -33,7 +31,7 @@ fun SettlementDialog(
 ) {
     val context = LocalContext.current
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale.CHINA) }
-    val scrollState = rememberScrollState()
+    val locationScrollState = rememberScrollState()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -56,9 +54,7 @@ fun SettlementDialog(
         },
         text = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(scrollState),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // 月份标签
@@ -83,15 +79,16 @@ fun SettlementDialog(
 
                 // 地点筛选
                 if (allLocations.size > 1) {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item {
-                            FilterChip(
-                                selected = selectedLocation.isEmpty(),
-                                onClick = { onLocationChange("") },
-                                label = { Text("全部", style = MaterialTheme.typography.labelSmall) }
-                            )
-                        }
-                        items(allLocations) { loc ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.horizontalScroll(locationScrollState)
+                    ) {
+                        FilterChip(
+                            selected = selectedLocation.isEmpty(),
+                            onClick = { onLocationChange("") },
+                            label = { Text("全部", style = MaterialTheme.typography.labelSmall) }
+                        )
+                        allLocations.forEach { loc ->
                             FilterChip(
                                 selected = selectedLocation == loc,
                                 onClick = { onLocationChange(loc) },
