@@ -33,6 +33,26 @@ fun SettlementDialog(
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale.CHINA) }
     val locationScrollState = rememberScrollState()
 
+    // 安全计算标题：settlement 为 null 时显示加载中提示
+    val periodLabel = settlement?.let { s ->
+        if (s.yearMonth.contains("年")) {
+            s.yearMonth
+        } else {
+            val parts = s.yearMonth.split("-")
+            if (parts.size == 2) {
+                try {
+                    "${parts[0]}年${parts[1].toInt()}月"
+                } catch (e: NumberFormatException) {
+                    s.yearMonth
+                }
+            } else {
+                s.yearMonth
+            }
+        }
+    } ?: "加载中..."
+
+    val locationLabel = if (selectedLocation.isNotEmpty()) " · $selectedLocation" else ""
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
@@ -57,14 +77,7 @@ fun SettlementDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // 月份标签
-                val periodLabel = if (settlement?.yearMonth?.contains("年") == true)
-                    "${settlement.yearMonth}" else {
-                    val parts = settlement?.yearMonth?.split("-") ?: listOf("", "")
-                    "${parts[0]}年${parts[1].toInt()}月"
-                }
-                val locationLabel = if (selectedLocation.isNotEmpty()) " · $selectedLocation" else ""
-                
+                // 月份标签 - 始终安全渲染
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = Primary.copy(alpha = 0.08f)
@@ -98,8 +111,12 @@ fun SettlementDialog(
                     }
                 }
 
+                // 数据区域：null 时显示加载指示器
                 if (settlement == null) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         CircularProgressIndicator(modifier = Modifier.size(32.dp))
                     }
                 } else {
@@ -107,7 +124,9 @@ fun SettlementDialog(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -121,21 +140,21 @@ fun SettlementDialog(
 
                             SettlementRow(
                                 "标准工",
-                                "${String.format("%.1f", settlement.standardDays)}天 × ${currencyFormat.format(settlement.standardDays.let { if (settlement.standardDays > 0) settlement.standardWage / settlement.standardDays else 0.0 })}",
+                                "${String.format("%.1f", settlement.standardDays)}天 × ${currencyFormat.format(if (settlement.standardDays > 0) settlement.standardWage / settlement.standardDays else 0.0)}",
                                 currencyFormat.format(settlement.standardWage),
                                 RecordStandard
                             )
 
                             SettlementRow(
                                 "加班工",
-                                "${String.format("%.1f", settlement.overtimeDays)}天 × ${currencyFormat.format(settlement.overtimeDays.let { if (settlement.overtimeDays > 0) settlement.overtimeWage / settlement.overtimeDays else 0.0 })}",
+                                "${String.format("%.1f", settlement.overtimeDays)}天 × ${currencyFormat.format(if (settlement.overtimeDays > 0) settlement.overtimeWage / settlement.overtimeDays else 0.0)}",
                                 currencyFormat.format(settlement.overtimeWage),
                                 RecordOvertime
                             )
 
                             SettlementRow(
                                 "手动折算",
-                                "${String.format("%.1f", settlement.manualDays)}天 × ${currencyFormat.format(settlement.manualDays.let { if (settlement.manualDays > 0) settlement.manualWage / settlement.manualDays else 0.0 })}",
+                                "${String.format("%.1f", settlement.manualDays)}天 × ${currencyFormat.format(if (settlement.manualDays > 0) settlement.manualWage / settlement.manualDays else 0.0)}",
                                 currencyFormat.format(settlement.manualWage),
                                 RecordManual
                             )
@@ -163,7 +182,9 @@ fun SettlementDialog(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -273,7 +294,15 @@ private fun generateSettlementText(
     val periodLabel = if (settlement.yearMonth.contains("年"))
         settlement.yearMonth else {
         val parts = settlement.yearMonth.split("-")
-        "${parts[0]}年${parts[1].toInt()}月"
+        if (parts.size == 2) {
+            try {
+                "${parts[0]}年${parts[1].toInt()}月"
+            } catch (e: NumberFormatException) {
+                settlement.yearMonth
+            }
+        } else {
+            settlement.yearMonth
+        }
     }
     val locationLabel = if (settlement.location.isNotEmpty()) "（${settlement.location}）" else ""
 
