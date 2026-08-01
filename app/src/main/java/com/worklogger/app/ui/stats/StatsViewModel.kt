@@ -61,6 +61,9 @@ class StatsViewModel(
     private val _uiState = MutableStateFlow(StatsUiState())
     val uiState: StateFlow<StatsUiState> = _uiState.asStateFlow()
     
+    // 结算单加载任务，用于取消重复的加载请求
+    private var settlementLoadJob: kotlinx.coroutines.Job? = null
+    
     init {
         loadData()
     }
@@ -360,54 +363,87 @@ class StatsViewModel(
     
     fun showSettlementSheet() {
         _uiState.update { it.copy(showSettlementDialog = true) }
-        viewModelScope.launch { loadSettlement() }
+        // 取消之前的加载任务，避免并发问题
+        settlementLoadJob?.cancel()
+        settlementLoadJob = viewModelScope.launch { loadSettlement() }
     }
     
     fun hideSettlementSheet() {
         _uiState.update { it.copy(showSettlementDialog = false) }
+        // 隐藏弹窗时取消加载任务
+        settlementLoadJob?.cancel()
     }
     
     fun updateSettlementLocation(location: String) {
         _uiState.update { it.copy(settlementLocation = location) }
-        viewModelScope.launch { loadSettlement() }
+        // 切换地点时取消之前的加载任务，避免并发问题
+        settlementLoadJob?.cancel()
+        settlementLoadJob = viewModelScope.launch { loadSettlement() }
     }
     
     private suspend fun loadSettlement() {
-        val state = _uiState.value
-        val settings = state.settings
-        val location = state.settlementLocation
-        
-        val (startDate, endDate, yearMonth) = when (state.selectedPeriod) {
-            "year" -> {
-                val year = state.selectedYear
-                Triple("$year-01-01", "${year.toInt() + 1}-01-01", "${year}年")
+        try {
+            val state = _uiState.value
+            val settings = state.settings
+            val location = state.settlementLocation
+
+            val (startDate, endDate, yearMonth) = when (state.selectedPeriod) {
+                "year" -> {
+                    val year = state.selectedYear
+                    Triple("$year-01-01", "${year.toInt() + 1}-01-01", "${year}年")
+                }
+                else -> {
+                    val ym = state.selectedYearMonth
+                    Triple(DateUtils.getYearMonthFirstDay(ym), DateUtils.getYearMonthNextFirstDay(ym), ym)
+                }
             }
-            else -> {
-                val ym = state.selectedYearMonth
-                Triple(DateUtils.getYearMonthFirstDay(ym), DateUtils.getYearMonthNextFirstDay(ym), ym)
+
+            val records = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, location)
+
+            // 计算同期预支合计（年视图=全年，月视图=当月）
+            val allAdvanceList = workRepository.allAdvanceRecords.first()
+            val totalAdvance = allAdvanceList
+                .filter { it.date >= startDate && it.date < endDate }
+                .sumOf { it.amount }
+
+            val settlement = StatsCalculator.calculateSettlement(
+                records = records,
+                advanceAmount = totalAdvance,
+                yearMonth = yearMonth,
+                location = location,
+                dailyWorkHours = settings.dailyWorkHours,
+                overtimeWorkHours = settings.overtimeWorkHours,
+                mealSubsidyStandard = settings.mealSubsidyStandard,
+                dailyWage = settings.dailyWage
+            )
+
+            _uiState.update { it.copy(settlement = settlement) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 协程被取消，不处理，保持当前状态
+            throw e
+        } catch (e: Exception) {
+            // 加载失败时设置一个空的 settlement，避免弹窗卡死或闪退
+            val state = _uiState.value
+            val yearMonth = when (state.selectedPeriod) {
+                "year" -> "${state.selectedYear}年"
+                else -> state.selectedYearMonth
             }
+            val emptySettlement = com.worklogger.app.model.MonthlySalarySettlement(
+                yearMonth = yearMonth,
+                location = state.settlementLocation,
+                standardDays = 0.0,
+                standardWage = 0.0,
+                overtimeDays = 0.0,
+                overtimeWage = 0.0,
+                manualDays = 0.0,
+                manualWage = 0.0,
+                mealSubsidyTotal = 0.0,
+                totalEarning = 0.0,
+                advanceAmount = 0.0,
+                netPayable = 0.0
+            )
+            _uiState.update { it.copy(settlement = emptySettlement) }
         }
-        
-        val records = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, location)
-        
-        // 计算同期预支合计（年视图=全年，月视图=当月）
-        val allAdvance = workRepository.allAdvanceRecords.first()
-        val totalAdvance = allAdvance
-            .filter { it.date >= startDate && it.date < endDate }
-            .sumOf { it.amount }
-        
-        val settlement = StatsCalculator.calculateSettlement(
-            records = records,
-            advanceAmount = totalAdvance,
-            yearMonth = yearMonth,
-            location = location,
-            dailyWorkHours = settings.dailyWorkHours,
-            overtimeWorkHours = settings.overtimeWorkHours,
-            mealSubsidyStandard = settings.mealSubsidyStandard,
-            dailyWage = settings.dailyWage
-        )
-        
-        _uiState.update { it.copy(settlement = settlement) }
     }
 }
 
