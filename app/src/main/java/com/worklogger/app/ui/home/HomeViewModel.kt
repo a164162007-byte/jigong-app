@@ -92,8 +92,11 @@ class HomeViewModel(
         // 使用地点筛选查询
         val records = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, state.selectedLocation)
         
+        // 统计计算只用当月数据，避免多算前月记录
+        val monthRecords = records.filter { it.date >= monthStartDate }
+        
         val stats = StatsCalculator.calculateStats(
-            records,
+            monthRecords,
             settings.dailyWorkHours,
             settings.overtimeWorkHours,
             settings.mealSubsidyStandard,
@@ -105,9 +108,10 @@ class HomeViewModel(
             settings.monthTarget
         )
         
-        val totalHours = records.sumOf { it.hours }
+        val totalHours = monthRecords.sumOf { it.hours }
         val totalWage = stats.wageTotal + stats.mealSubsidyTotal
         
+        // 漏记检查用完整范围（含前月），确保跨月日期不被误报
         val missedDays = findMissedDays(records)
         
         // 优化：按日期分组取最近7天的完整数据，避免截断破坏分组完整性
