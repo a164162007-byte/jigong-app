@@ -139,15 +139,15 @@ fun StatsScreen(
                 // 统计卡片 2x2
                 item {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatsCard(title = "标准工天数", value = String.format("%.1f", uiState.currentStats.standardDays), color = RecordStandard, modifier = Modifier.weight(1f))
-                        StatsCard(title = "手动折算天数", value = String.format("%.1f", uiState.currentStats.manualDays), color = RecordManual, modifier = Modifier.weight(1f))
+                        StatsCard(title = "标准工天数", value = String.format("%.2f", uiState.currentStats.standardDays), color = RecordStandard, modifier = Modifier.weight(1f))
+                        StatsCard(title = "手动折算天数", value = String.format("%.2f", uiState.currentStats.manualDays), color = RecordManual, modifier = Modifier.weight(1f))
                     }
                 }
                 
                 item {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatsCard(title = "加班总小时", value = String.format("%.1f", uiState.currentStats.overtimeHours), color = RecordOvertime, modifier = Modifier.weight(1f))
-                        StatsCard(title = "加班折算天数", value = String.format("%.1f", uiState.currentStats.overtimeDays), color = RecordOvertime, modifier = Modifier.weight(1f))
+                        StatsCard(title = "加班总小时", value = String.format("%.2f", uiState.currentStats.overtimeHours), color = RecordOvertime, modifier = Modifier.weight(1f))
+                        StatsCard(title = "加班折算天数", value = String.format("%.2f", uiState.currentStats.overtimeDays), color = RecordOvertime, modifier = Modifier.weight(1f))
                     }
                 }
                 
@@ -157,11 +157,11 @@ fun StatsScreen(
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(text = "总标准工", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(12.dp))
-                            DetailRow("标准工", String.format("%.1f 天", uiState.currentStats.standardDays))
+                            DetailRow("标准工", String.format("%.2f 天", uiState.currentStats.standardDays))
                             Spacer(modifier = Modifier.height(4.dp))
-                            DetailRow("手动折算", String.format("%.1f 天", uiState.currentStats.manualDays))
+                            DetailRow("手动折算", String.format("%.2f 天", uiState.currentStats.manualDays))
                             Spacer(modifier = Modifier.height(4.dp))
-                            DetailRow("加班折算", String.format("%.1f 天", uiState.currentStats.overtimeDays))
+                            DetailRow("加班折算", String.format("%.2f 天", uiState.currentStats.overtimeDays))
                             Divider(modifier = Modifier.padding(vertical = 8.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text(text = "合计", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
@@ -540,12 +540,12 @@ fun OvertimeDistributionCard(distribution: Map<Double, Int>, totalDays: Double, 
             Divider(modifier = Modifier.padding(vertical = 8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(text = "总加班天数", style = MaterialTheme.typography.bodyMedium)
-                Text(text = String.format("%.1f 天", totalDays), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = RecordOvertime)
+                Text(text = String.format("%.2f 天", totalDays), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = RecordOvertime)
             }
             Spacer(modifier = Modifier.height(4.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(text = "总加班小时", style = MaterialTheme.typography.bodyMedium)
-                Text(text = String.format("%.1f 小时", totalHours), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = RecordOvertime)
+                Text(text = String.format("%.2f 小时", totalHours), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = RecordOvertime)
             }
         }
     }
@@ -597,7 +597,7 @@ fun PieChartView(data: Map<String, Int>, modifier: Modifier = Modifier) {
     )
 }
 
-private fun formatDiff(value: Double): String = when { value > 0 -> "+${String.format("%.1f", value)}"; value < 0 -> String.format("%.1f", value); else -> "0" }
+private fun formatDiff(value: Double): String = when { value > 0 -> "+${String.format("%.2f", value)}"; value < 0 -> String.format("%.2f", value); else -> "0" }
 
 @Composable
 fun MonthlyDetailCardWithActions(title: String = "", records: List<WorkRecord>, onEdit: (WorkRecord) -> Unit, onDelete: (WorkRecord) -> Unit) {
@@ -636,7 +636,7 @@ private fun RecordDetailItemWithActions(record: WorkRecord, onEdit: () -> Unit, 
                 val typeText = when { record.isOvertime -> "加班"; record.isManual -> "手动折算"; else -> "标准工" }
                 val typeColor = when { record.isOvertime -> RecordOvertime; record.isManual -> RecordManual; else -> RecordStandard }
                 Text(text = typeText, style = MaterialTheme.typography.labelMedium, color = typeColor)
-                Text(text = "${String.format("%.1f", record.hours)}小时", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Text(text = "${String.format("%.2f", record.hours)}小时", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Edit, contentDescription = "编辑", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) }
                 IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp)) }
             }

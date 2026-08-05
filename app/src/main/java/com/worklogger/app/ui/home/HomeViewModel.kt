@@ -83,7 +83,10 @@ class HomeViewModel(
     private suspend fun loadMonthlyData(settings: UserSettings) {
         val state = _uiState.value
         val currentMonth = state.currentMonth
-        val startDate = DateUtils.getYearMonthFirstDay(currentMonth)
+        val monthStartDate = DateUtils.getYearMonthFirstDay(currentMonth)
+        val sevenDaysAgo = DateUtils.getDaysAgo(7)
+        // 取更早的日期作为查询起点，确保最近7天的跨月记录不被遗漏
+        val startDate = if (sevenDaysAgo < monthStartDate) sevenDaysAgo else monthStartDate
         val endDate = DateUtils.getYearMonthNextFirstDay(currentMonth)
         
         // 使用地点筛选查询

@@ -140,21 +140,21 @@ fun SettlementDialog(
 
                             SettlementRow(
                                 "标准工",
-                                "${String.format("%.1f", settlement.standardDays)}天 × ${currencyFormat.format(if (settlement.standardDays > 0) settlement.standardWage / settlement.standardDays else 0.0)}",
+                                "${String.format("%.2f", settlement.standardDays)}天 × ${currencyFormat.format(if (settlement.standardDays > 0) settlement.standardWage / settlement.standardDays else 0.0)}",
                                 currencyFormat.format(settlement.standardWage),
                                 RecordStandard
                             )
 
                             SettlementRow(
                                 "加班工",
-                                "${String.format("%.1f", settlement.overtimeDays)}天 × ${currencyFormat.format(if (settlement.overtimeDays > 0) settlement.overtimeWage / settlement.overtimeDays else 0.0)}",
+                                "${String.format("%.2f", settlement.overtimeDays)}天 × ${currencyFormat.format(if (settlement.overtimeDays > 0) settlement.overtimeWage / settlement.overtimeDays else 0.0)}",
                                 currencyFormat.format(settlement.overtimeWage),
                                 RecordOvertime
                             )
 
                             SettlementRow(
                                 "手动折算",
-                                "${String.format("%.1f", settlement.manualDays)}天 × ${currencyFormat.format(if (settlement.manualDays > 0) settlement.manualWage / settlement.manualDays else 0.0)}",
+                                "${String.format("%.2f", settlement.manualDays)}天 × ${currencyFormat.format(if (settlement.manualDays > 0) settlement.manualWage / settlement.manualDays else 0.0)}",
                                 currencyFormat.format(settlement.manualWage),
                                 RecordManual
                             )
@@ -310,9 +310,9 @@ private fun generateSettlementText(
         appendLine("【$periodLabel 工资结算单】$locationLabel")
         appendLine()
         appendLine("━━ 收入明细 ━━")
-        appendLine("标准工：${String.format("%.1f", settlement.standardDays)}天 → ${currencyFormat.format(settlement.standardWage)}")
-        appendLine("加班工：${String.format("%.1f", settlement.overtimeDays)}天 → ${currencyFormat.format(settlement.overtimeWage)}")
-        appendLine("手动折算：${String.format("%.1f", settlement.manualDays)}天 → ${currencyFormat.format(settlement.manualWage)}")
+        appendLine("标准工：${String.format("%.2f", settlement.standardDays)}天 → ${currencyFormat.format(settlement.standardWage)}")
+        appendLine("加班工：${String.format("%.2f", settlement.overtimeDays)}天 → ${currencyFormat.format(settlement.overtimeWage)}")
+        appendLine("手动折算：${String.format("%.2f", settlement.manualDays)}天 → ${currencyFormat.format(settlement.manualWage)}")
         appendLine("饭补合计：${currencyFormat.format(settlement.mealSubsidyTotal)}")
         appendLine("应发合计：${currencyFormat.format(settlement.totalEarning)}")
         appendLine()
