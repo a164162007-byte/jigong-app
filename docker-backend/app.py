@@ -18,7 +18,7 @@
 版本: 1.19.0
 """
 
-VERSION = '2.3.3'
+VERSION = '2.3.5'
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import os
