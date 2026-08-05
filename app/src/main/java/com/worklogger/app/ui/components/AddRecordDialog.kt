@@ -339,7 +339,7 @@ fun QuickCheckInDialog(
     var showLocationDropdown by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf(DateUtils.today()) }
     var showDatePicker by remember { mutableStateOf(false) }
-    var overtimeHours by remember { mutableStateOf("0") }
+    var overtimeHours by remember { mutableStateOf("") }
     
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = DateUtils.parseDate(selectedDate)?.time ?: System.currentTimeMillis()
