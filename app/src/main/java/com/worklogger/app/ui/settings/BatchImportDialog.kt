@@ -249,7 +249,7 @@ private fun ReviewStep(
 
     // ====== 冲突项 ======
     if (analysis.conflicts.isNotEmpty()) {
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Divider(modifier = Modifier.padding(vertical = 8.dp))
 
         Text(
             text = "⚠️ 冲突记录（${analysis.conflicts.size}条）",
@@ -293,7 +293,7 @@ private fun ReviewStep(
 
     // ====== 识别失败 ======
     if (analysis.failedLines.isNotEmpty()) {
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Divider(modifier = Modifier.padding(vertical = 8.dp))
 
         Text(
             text = "❌ 识别失败（${analysis.failedLines.size}行）",

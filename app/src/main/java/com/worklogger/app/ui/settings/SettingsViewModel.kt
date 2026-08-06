@@ -597,7 +597,7 @@ class SettingsViewModel(
                         }
                         ConflictDecision.OVERWRITE -> {
                             // 删除旧记录（软删除），插入新记录
-                            workRepository.moveToTrash(conflict.existingRecord.id.toLong())
+                            workRepository.softDeleteRecord(conflict.existingRecord.id.toLong())
                             workRepository.insert(conflict.newRecord)
                             overwrittenCount++
                         }
