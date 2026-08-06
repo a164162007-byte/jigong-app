@@ -12,6 +12,14 @@ data class ParsedWorkEntry(
 )
 
 /**
+ * 解析结果，包含成功解析的条目和无法识别的行
+ */
+data class ParseResult(
+    val entries: List<ParsedWorkEntry>,
+    val failedLines: List<String>
+)
+
+/**
  * 文本记工解析器
  *
  * 支持的格式：
@@ -51,8 +59,9 @@ object TextRecordParser {
         fallbackYear: Int = DateUtils.getYear(),
         fallbackMonth: Int = DateUtils.getMonth(),
         dailyWorkHours: Double = 9.0
-    ): List<ParsedWorkEntry> {
+    ): ParseResult {
         val entries = mutableListOf<ParsedWorkEntry>()
+        val failedLines = mutableListOf<String>()
         val lines = text.lines().map { it.trim() }.filter { it.isNotBlank() }
 
         var currentMonth: Int? = null
@@ -98,10 +107,11 @@ object TextRecordParser {
                 continue
             }
 
-            // 无法识别的行跳过，不报错
+            // 无法识别的行收集到failedLines
+            failedLines.add(line)
         }
 
-        return entries
+        return ParseResult(entries, failedLines)
     }
 
     /**

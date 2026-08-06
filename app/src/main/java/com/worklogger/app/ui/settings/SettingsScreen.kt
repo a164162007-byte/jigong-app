@@ -266,8 +266,26 @@ fun SettingsScreen(
         if (uiState.showBatchImportDialog) {
             BatchImportDialog(
                 dailyWorkHours = uiState.settings.dailyWorkHours,
-                onDismiss = { viewModel.hideBatchImportDialog() },
-                onImport = { entries -> viewModel.performBatchImport(entries) }
+                analysis = uiState.batchImportAnalysis,
+                onDismiss = {
+                    viewModel.clearBatchImportAnalysis()
+                    viewModel.hideBatchImportDialog()
+                },
+                onAnalyze = { entries, failedLines ->
+                    viewModel.analyzeBatchImport(entries, failedLines)
+                },
+                onExecute = { viewModel.executeBatchImport() },
+                onUpdateConflictDecision = { index, decision ->
+                    viewModel.updateConflictDecision(index, decision)
+                },
+                onSetAllConflictDecisions = { decision ->
+                    viewModel.setAllConflictDecisions(decision)
+                },
+                onUpdateFailedLineCorrection = { index, text ->
+                    viewModel.updateFailedLineCorrection(index, text)
+                },
+                onReparseFailedLines = { viewModel.reparseFailedLines() },
+                onClearAnalysis = { viewModel.clearBatchImportAnalysis() }
             )
         }
 
