@@ -1,0 +1,19 @@
+# Keystore (never commit secrets)
+*.jks
+*.keystore
+keystore_base64.txt
+
+# Gradle
+.gradle/
+build/
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# APK and build artifacts
+*.apk
+*.zip
+*.aab
+Screenshot_*
