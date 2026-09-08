@@ -21,95 +21,82 @@ data class ReleaseInfo(
 
 /**
  * 应用更新检查器
- * 用于检查 GitHub Releases 是否有新版本
+ * 通过 GitHub 公开文件检查更新，无需任何 Token，永不过期
  */
 class UpdateChecker {
     
     companion object {
-        private const val GITHUB_API_URL = "https://api.github.com/repos/a164162007-byte/jigong-app/releases/latest"
-        private const val CURRENT_VERSION_NAME = "2.3.6"
-        private const val CURRENT_VERSION_CODE = 2360
-        private const val TOKEN_PART1 = "ghp_gmvJAdBv3DG21"
-        private const val TOKEN_PART2 = "NmTnAi2cwbEOB6NMj3cTIbd"
-        private val GITHUB_TOKEN get() = TOKEN_PART1 + TOKEN_PART2
+        // 主地址：GitHub raw 内容（官方CDN）
+        private const val VERSION_JSON_URL = "https://raw.githubusercontent.com/a164162007-byte/jigong-app/main/version.json"
+        // 备用地址：jsDelivr CDN（国内访问更稳定）
+        private const val VERSION_JSON_URL_BACKUP = "https://cdn.jsdelivr.net/gh/a164162007-byte/jigong-app@latest/version.json"
+        
+        private const val CURRENT_VERSION_NAME = "2.3.7"
+        private const val CURRENT_VERSION_CODE = 2370
     }
     
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
         .build()
     
     private val gson = Gson()
     
     /**
      * 检查更新
+     * 优先从 GitHub raw 读取，失败则从 jsDelivr CDN 读取
      * @return ReleaseInfo? 返回最新版本信息，如果请求失败返回 null
      */
     suspend fun checkForUpdate(): Result<ReleaseInfo> = withContext(Dispatchers.IO) {
-        try {
+        // 优先尝试主地址
+        var result = fetchVersionInfo(VERSION_JSON_URL)
+        
+        // 主地址失败，尝试备用地址
+        if (result.isFailure) {
+            result = fetchVersionInfo(VERSION_JSON_URL_BACKUP)
+        }
+        
+        result
+    }
+    
+    /**
+     * 从指定 URL 获取版本信息
+     */
+    private fun fetchVersionInfo(url: String): Result<ReleaseInfo> {
+        return try {
             val request = Request.Builder()
-                .url(GITHUB_API_URL)
-                .header("Accept", "application/vnd.github.v3+json")
-                .header("Authorization", "token $GITHUB_TOKEN")
+                .url(url)
+                .header("Accept", "application/json")
                 .get()
                 .build()
             
             val response = client.newCall(request).execute()
             
             if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("检查更新失败：HTTP ${response.code}"))
+                return Result.failure(Exception("检查更新失败：HTTP ${response.code}"))
             }
             
             val body = response.body?.string()
             if (body.isNullOrEmpty()) {
-                return@withContext Result.failure(Exception("检查更新失败：响应为空"))
+                return Result.failure(Exception("检查更新失败：响应为空"))
             }
             
             val json = gson.fromJson(body, JsonObject::class.java)
             
-            val tagName = json.get("tag_name")?.asString ?: ""
-            val bodyContent = json.get("body")?.asString ?: "暂无更新说明"
-            val assets = json.getAsJsonArray("assets")
-            
-            // 提取版本号
-            val versionName = tagName.removePrefix("v")
-            
-            // 查找 APK 文件
-            var downloadUrl: String? = null
-            if (assets != null) {
-                for (asset in assets) {
-                    val name = asset.asJsonObject.get("name")?.asString ?: ""
-                    if (name.endsWith(".apk", ignoreCase = true)) {
-                        downloadUrl = asset.asJsonObject.get("browser_download_url")?.asString
-                        break
-                    }
-                }
-            }
-            
-            // 如果没有找到 APK，尝试从 HTML URL 构造
-            if (downloadUrl == null) {
-                val htmlUrl = json.get("html_url")?.asString
-                if (htmlUrl != null) {
-                    // 这是 Release 页面的 URL，需要构造 APK 下载地址
-                    val repoUrl = "https://github.com/a164162007-byte/jigong-app/releases/download/$tagName"
-                    downloadUrl = "$repoUrl/jigong-app-$versionName.apk"
-                }
-            }
-            
-            if (downloadUrl == null) {
-                return@withContext Result.failure(Exception("未找到 APK 文件，请前往 GitHub 下载"))
-            }
-            
-            // 计算版本代码
-            val newVersionCode = parseVersionCode(versionName)
+            val versionName = json.get("versionName")?.asString
+                ?: return Result.failure(Exception("版本信息格式错误"))
+            val versionCode = json.get("versionCode")?.asInt ?: 0
+            val releaseNotes = json.get("releaseNotes")?.asString ?: "暂无更新说明"
+            val downloadUrl = json.get("downloadUrl")?.asString
+                ?: return Result.failure(Exception("未找到下载地址"))
             
             val releaseInfo = ReleaseInfo(
                 versionName = versionName,
-                versionCode = newVersionCode,
-                releaseNotes = bodyContent,
+                versionCode = versionCode,
+                releaseNotes = releaseNotes,
                 downloadUrl = downloadUrl,
                 isNewerThan = { currentVersion ->
-                    compareVersions(currentVersion, versionName) > 0
+                    compareVersions(currentVersion, versionName) < 0
                 }
             )
             
