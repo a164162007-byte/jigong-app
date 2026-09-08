@@ -1,6 +1,6 @@
 {
-  "versionName": "2.3.7",
-  "versionCode": 2370,
-  "downloadUrl": "https://github.com/a164162007-byte/jigong-app/releases/download/v2.3.7/jigong-app-v2.3.7-debug.apk",
-  "releaseNotes": "v2.3.7 更新内容：\n- 修复在线升级功能：移除过期Token，改用GitHub公开文件检查更新\n- 新增jsDelivr CDN备用地址，国内访问更稳定\n- 版本检查永不因Token过期而失败"
+  "versionName": "2.3.8",
+  "versionCode": 2380,
+  "downloadUrl": "https://github.com/a164162007-byte/jigong-app/releases/download/v2.3.8/app-debug.apk",
+  "releaseNotes": "v2.3.8 更新内容：\n- UI重构：底部导航精简为4项（记工、统计、日历、设置）\n- 统计页改造为3个子Tab：统计总览 | 预支 | 垫资\n- FAB按钮根据当前Tab动态切换显示\n- 「购买」功能改名为「垫资」\n- 预支/垫资页面嵌入统计Tab，更紧凑直观"
 }
