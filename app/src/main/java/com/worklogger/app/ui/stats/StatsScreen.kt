@@ -1,6 +1,7 @@
 package com.worklogger.app.ui.stats
 
 import android.graphics.Color as AndroidColor
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,23 +29,31 @@ import com.github.mikephil.charting.components.XAxis
 import com.github.mikephil.charting.data.*
 import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
 import com.worklogger.app.model.WorkRecord
+import com.worklogger.app.ui.advance.AdvanceSalaryContent
+import com.worklogger.app.ui.advance.AdvanceSalaryViewModel
 import com.worklogger.app.ui.components.*
+import com.worklogger.app.ui.purchase.PurchaseContent
+import com.worklogger.app.ui.purchase.PurchaseViewModel
 import com.worklogger.app.ui.theme.*
 import com.worklogger.app.utils.DateUtils
 import java.text.NumberFormat
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun StatsScreen(
-    viewModel: StatsViewModel
+    statsViewModel: StatsViewModel,
+    advanceSalaryViewModel: AdvanceSalaryViewModel,
+    purchaseViewModel: PurchaseViewModel
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by statsViewModel.uiState.collectAsState()
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabTitles = listOf("统计", "预支", "垫资")
     
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
+            if (event == Lifecycle.Event.ON_RESUME) { statsViewModel.refresh() }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -53,305 +62,379 @@ fun StatsScreen(
     
     Scaffold(
         topBar = {
-            if (uiState.isBatchMode) {
-                TopAppBar(
-                    title = {
-                        Text(text = "已选择 ${uiState.selectedRecordIds.size} 条", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { viewModel.exitBatchMode() }) {
-                            Icon(Icons.Default.Close, contentDescription = "退出选择")
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { viewModel.selectAllRecords() }) {
-                            Icon(Icons.Default.SelectAll, contentDescription = "全选")
-                        }
-                        IconButton(onClick = { viewModel.showBatchDeleteConfirm() }, enabled = uiState.selectedRecordIds.isNotEmpty()) {
-                            Icon(Icons.Default.DeleteSweep, contentDescription = "批量删除",
-                                tint = if (uiState.selectedRecordIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Primary.copy(alpha = 0.1f))
-                )
+            if (selectedTab == 0) {
+                if (uiState.isBatchMode) {
+                    TopAppBar(
+                        title = {
+                            Text(text = "已选择 ${uiState.selectedRecordIds.size} 条", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { statsViewModel.exitBatchMode() }) {
+                                Icon(Icons.Default.Close, contentDescription = "退出选择")
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = { statsViewModel.selectAllRecords() }) {
+                                Icon(Icons.Default.SelectAll, contentDescription = "全选")
+                            }
+                            IconButton(onClick = { statsViewModel.showBatchDeleteConfirm() }, enabled = uiState.selectedRecordIds.isNotEmpty()) {
+                                Icon(Icons.Default.DeleteSweep, contentDescription = "批量删除",
+                                    tint = if (uiState.selectedRecordIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Primary.copy(alpha = 0.1f))
+                    )
+                } else {
+                    TopAppBar(
+                        title = {
+                            Text(text = "统计", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        },
+                        actions = {
+                            if (uiState.monthlyDetailRecords.isNotEmpty()) {
+                                IconButton(onClick = { statsViewModel.enterBatchMode() }) {
+                                    Icon(Icons.Default.FilterList, contentDescription = "批量操作")
+                                }
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                    )
+                }
             } else {
                 TopAppBar(
                     title = {
-                        Text(text = "统计", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    },
-                    actions = {
-                        if (uiState.monthlyDetailRecords.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.enterBatchMode() }) {
-                                Icon(Icons.Default.FilterList, contentDescription = "批量操作")
-                            }
-                        }
+                        Text(text = tabTitles[selectedTab], style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
                 )
             }
+        },
+        floatingActionButton = {
+            when (selectedTab) {
+                1 -> {
+                    ExtendedFloatingActionButton(
+                        onClick = { advanceSalaryViewModel.showAddDialog() },
+                        containerColor = Primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("预支")
+                    }
+                }
+                2 -> {
+                    ExtendedFloatingActionButton(
+                        onClick = { purchaseViewModel.showAddDialog() },
+                        containerColor = AdvancePurchase,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("垫资")
+                    }
+                }
+            }
         }
     ) { padding ->
-        if (uiState.isLoading) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Tab 栏
+            ScrollableTabRow(
+                selectedTabIndex = selectedTab,
+                edgePadding = 16.dp,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary
             ) {
-                // 月/年视图切换
-                if (!uiState.isBatchMode) {
-                    item {
-                        ViewModeToggle(selectedPeriod = uiState.selectedPeriod, onModeSelected = { viewModel.setViewMode(it) })
+                tabTitles.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = { Text(text = title, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal) }
+                    )
+                }
+            }
+            
+            // Tab 内容
+            when (selectedTab) {
+                0 -> StatsContent(statsViewModel = statsViewModel)
+                1 -> AdvanceSalaryContent(viewModel = advanceSalaryViewModel)
+                2 -> PurchaseContent(viewModel = purchaseViewModel)
+            }
+        }
+        
+        // 统计 Tab 的对话框
+        if (selectedTab == 0) {
+            // 编辑对话框
+            if (uiState.showEditDialog && uiState.editingRecord != null) {
+                AddRecordDialog(
+                    record = uiState.editingRecord, recentLocations = emptyList(),
+                    onDismiss = { statsViewModel.hideEditDialog() },
+                    onSave = { date, hours, isOvertime, location, remark, mealSubsidy, isManual ->
+                        statsViewModel.saveEditedRecord(date, hours, isOvertime, location, remark, mealSubsidy, isManual)
                     }
-                    
-                    // 时间选择器
+                )
+            }
+            
+            // 删除确认
+            if (uiState.showDeleteConfirm && uiState.deletingRecord != null) {
+                ConfirmDialog(title = "确认删除", message = "确定要删除 ${uiState.deletingRecord!!.date} 的记录吗？删除后可从回收站恢复。",
+                    confirmText = "删除", onConfirm = { statsViewModel.confirmDelete() }, onDismiss = { statsViewModel.hideDeleteConfirm() }, isDangerous = true)
+            }
+            
+            // 批量删除确认
+            if (uiState.showBatchDeleteConfirm) {
+                ConfirmDialog(title = "批量删除", message = "确定要删除选中的 ${uiState.selectedRecordIds.size} 条记录吗？删除后可从回收站恢复。",
+                    confirmText = "删除", onConfirm = { statsViewModel.confirmBatchDelete() }, onDismiss = { statsViewModel.hideBatchDeleteConfirm() }, isDangerous = true)
+            }
+            
+            // 工资结算单弹窗
+            if (uiState.showSettlementDialog) {
+                SettlementDialog(
+                    settlement = uiState.settlement,
+                    allLocations = uiState.allLocations,
+                    selectedLocation = uiState.settlementLocation,
+                    onLocationChange = { statsViewModel.updateSettlementLocation(it) },
+                    onDismiss = { statsViewModel.hideSettlementSheet() }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 统计内容部分（原 StatsScreen 的统计展示逻辑）
+ */
+@Composable
+fun StatsContent(
+    statsViewModel: StatsViewModel
+) {
+    val uiState by statsViewModel.uiState.collectAsState()
+    val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale.CHINA) }
+    
+    if (uiState.isLoading) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // 月/年视图切换
+            if (!uiState.isBatchMode) {
+                item {
+                    ViewModeToggle(selectedPeriod = uiState.selectedPeriod, onModeSelected = { statsViewModel.setViewMode(it) })
+                }
+                
+                // 时间选择器
+                item {
+                    if (uiState.selectedPeriod == "year") {
+                        YearSelector(
+                            year = uiState.selectedYear,
+                            onPrevious = { statsViewModel.previousYear() },
+                            onNext = { statsViewModel.nextYear() }
+                        )
+                    } else {
+                        MonthSelector(
+                            yearMonth = uiState.selectedYearMonth,
+                            onPrevious = { statsViewModel.previousMonth() },
+                            onNext = { statsViewModel.nextMonth() }
+                        )
+                    }
+                }
+                
+                // 地点筛选
+                if (uiState.allLocations.isNotEmpty()) {
                     item {
-                        if (uiState.selectedPeriod == "year") {
-                            YearSelector(
-                                year = uiState.selectedYear,
-                                onPrevious = { viewModel.previousYear() },
-                                onNext = { viewModel.nextYear() }
-                            )
-                        } else {
-                            MonthSelector(
-                                yearMonth = uiState.selectedYearMonth,
-                                onPrevious = { viewModel.previousMonth() },
-                                onNext = { viewModel.nextMonth() }
-                            )
+                        LocationFilterChips(
+                            locations = uiState.allLocations,
+                            selectedLocation = uiState.selectedLocation,
+                            onLocationSelected = { statsViewModel.selectLocation(it) }
+                        )
+                    }
+                }
+            }
+            
+            // 统计卡片 2x2
+            item {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatsCard(title = "标准工天数", value = String.format("%.2f", uiState.currentStats.standardDays), color = RecordStandard, modifier = Modifier.weight(1f))
+                    StatsCard(title = "手动折算天数", value = String.format("%.2f", uiState.currentStats.manualDays), color = RecordManual, modifier = Modifier.weight(1f))
+                }
+            }
+            
+            item {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatsCard(title = "加班总小时", value = String.format("%.2f", uiState.currentStats.overtimeHours), color = RecordOvertime, modifier = Modifier.weight(1f))
+                    StatsCard(title = "加班折算天数", value = String.format("%.2f", uiState.currentStats.overtimeDays), color = RecordOvertime, modifier = Modifier.weight(1f))
+                }
+            }
+            
+            // 总标准工详情
+            item {
+                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(text = "总标准工", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        DetailRow("标准工", String.format("%.2f 天", uiState.currentStats.standardDays))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        DetailRow("手动折算", String.format("%.2f 天", uiState.currentStats.manualDays))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        DetailRow("加班折算", String.format("%.2f 天", uiState.currentStats.overtimeDays))
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "合计", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Text(text = String.format("%.2f 天", uiState.currentStats.totalStandard), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Primary)
                         }
                     }
-                    
-                    // 地点筛选
-                    if (uiState.allLocations.isNotEmpty()) {
-                        item {
-                            LocationFilterChips(
-                                locations = uiState.allLocations,
-                                selectedLocation = uiState.selectedLocation,
-                                onLocationSelected = { viewModel.selectLocation(it) }
+                }
+            }
+            
+            // 饭补和工资
+            item {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatsCard(title = "饭补合计", value = currencyFormat.format(uiState.currentStats.mealSubsidyTotal), subtitle = "日标准 ${currencyFormat.format(uiState.settings.mealSubsidyStandard)}", color = Success, modifier = Modifier.weight(1f))
+                    StatsCard(title = "应发工资", value = currencyFormat.format(uiState.currentStats.wageTotal), subtitle = "日标准 ${currencyFormat.format(uiState.currentStats.dailyWage)}", color = Primary, modifier = Modifier.weight(1f))
+                }
+            }
+            
+            // 工资结算单入口
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Receipt,
+                                contentDescription = null,
+                                tint = Primary,
+                                modifier = Modifier.size(20.dp)
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = "工资结算", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(text = "应发", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(text = currencyFormat.format(uiState.currentStats.wageTotal + uiState.currentStats.mealSubsidyTotal), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = "预支", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(text = "-${currencyFormat.format(uiState.currentPeriodAdvance)}", style = MaterialTheme.typography.bodyMedium, color = Decrease)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(text = "实发", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                val netPayable = uiState.currentStats.wageTotal + uiState.currentStats.mealSubsidyTotal - uiState.currentPeriodAdvance
+                                Text(text = currencyFormat.format(netPayable), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Primary)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedButton(
+                            onClick = { statsViewModel.showSettlementSheet() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("查看结算明细")
                         }
                     }
                 }
-                
-                // 统计卡片 2x2
-                item {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatsCard(title = "标准工天数", value = String.format("%.2f", uiState.currentStats.standardDays), color = RecordStandard, modifier = Modifier.weight(1f))
-                        StatsCard(title = "手动折算天数", value = String.format("%.2f", uiState.currentStats.manualDays), color = RecordManual, modifier = Modifier.weight(1f))
-                    }
-                }
-                
-                item {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatsCard(title = "加班总小时", value = String.format("%.2f", uiState.currentStats.overtimeHours), color = RecordOvertime, modifier = Modifier.weight(1f))
-                        StatsCard(title = "加班折算天数", value = String.format("%.2f", uiState.currentStats.overtimeDays), color = RecordOvertime, modifier = Modifier.weight(1f))
-                    }
-                }
-                
-                // 总标准工详情
+            }
+            
+            // 数据对比
+            item {
+                ComparisonCard(
+                    currentHours = uiState.currentStats.totalStandard, currentMealSubsidy = uiState.currentStats.mealSubsidyTotal,
+                    currentWage = uiState.currentStats.wageTotal + uiState.currentStats.mealSubsidyTotal,
+                    previousHours = uiState.previousStats.totalStandard, previousMealSubsidy = uiState.previousStats.mealSubsidyTotal,
+                    previousWage = uiState.previousStats.wageTotal + uiState.previousStats.mealSubsidyTotal
+                )
+            }
+            
+            // 加班分布
+            item {
+                OvertimeDistributionCard(distribution = uiState.overtimeDistribution, totalDays = uiState.totalOvertimeDays, totalHours = uiState.totalOvertimeHours)
+            }
+            
+            // 年度月度分解柱状图（年视图）
+            if (uiState.selectedPeriod == "year" && uiState.yearMonthlyBreakdown.isNotEmpty()) {
                 item {
                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text(text = "总标准工", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            DetailRow("标准工", String.format("%.2f 天", uiState.currentStats.standardDays))
-                            Spacer(modifier = Modifier.height(4.dp))
-                            DetailRow("手动折算", String.format("%.2f 天", uiState.currentStats.manualDays))
-                            Spacer(modifier = Modifier.height(4.dp))
-                            DetailRow("加班折算", String.format("%.2f 天", uiState.currentStats.overtimeDays))
-                            Divider(modifier = Modifier.padding(vertical = 8.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(text = "合计", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                Text(text = String.format("%.2f 天", uiState.currentStats.totalStandard), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Primary)
-                            }
+                            Text(text = "${uiState.selectedYear}年月度工时", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            AnnualBarChart(data = uiState.yearMonthlyBreakdown, modifier = Modifier.fillMaxWidth().height(220.dp))
                         }
                     }
                 }
-                
-                // 饭补和工资
+            }
+            
+            // 近6个月趋势图（月视图）
+            if (uiState.selectedPeriod == "month") {
                 item {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatsCard(title = "饭补合计", value = currencyFormat.format(uiState.currentStats.mealSubsidyTotal), subtitle = "日标准 ${currencyFormat.format(uiState.settings.mealSubsidyStandard)}", color = Success, modifier = Modifier.weight(1f))
-                        StatsCard(title = "应发工资", value = currencyFormat.format(uiState.currentStats.wageTotal), subtitle = "日标准 ${currencyFormat.format(uiState.currentStats.dailyWage)}", color = Primary, modifier = Modifier.weight(1f))
-                    }
-                }
-                
-                // 工资结算单入口
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
+                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.Receipt,
-                                    contentDescription = null,
-                                    tint = Primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "工资结算", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(text = "应发", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(text = currencyFormat.format(uiState.currentStats.wageTotal + uiState.currentStats.mealSubsidyTotal), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                            Text(text = "近6个月工时趋势", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            if (uiState.monthlyTrend.isNotEmpty()) {
+                                LineChartView(data = uiState.monthlyTrend, modifier = Modifier.fillMaxWidth().height(200.dp))
+                            } else {
+                                Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                                    Text(text = "暂无数据", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(text = "预支", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(text = "-${currencyFormat.format(uiState.currentPeriodAdvance)}", style = MaterialTheme.typography.bodyMedium, color = Decrease)
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(text = "实发", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    val netPayable = uiState.currentStats.wageTotal + uiState.currentStats.mealSubsidyTotal - uiState.currentPeriodAdvance
-                                    Text(text = currencyFormat.format(netPayable), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Primary)
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            OutlinedButton(
-                                onClick = { viewModel.showSettlementSheet() },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("查看结算明细")
                             }
                         }
                     }
                 }
-                
-                // 数据对比
+            }
+            
+            // 地点分布饼图
+            if (uiState.locationDistribution.isNotEmpty()) {
                 item {
-                    ComparisonCard(
-                        currentHours = uiState.currentStats.totalStandard, currentMealSubsidy = uiState.currentStats.mealSubsidyTotal,
-                        currentWage = uiState.currentStats.wageTotal + uiState.currentStats.mealSubsidyTotal,
-                        previousHours = uiState.previousStats.totalStandard, previousMealSubsidy = uiState.previousStats.mealSubsidyTotal,
-                        previousWage = uiState.previousStats.wageTotal + uiState.previousStats.mealSubsidyTotal
+                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            val title = if (uiState.selectedPeriod == "year") "${uiState.selectedYear}年地点分布" else "本月地点分布"
+                            Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            PieChartView(data = uiState.locationDistribution, modifier = Modifier.fillMaxWidth().height(200.dp))
+                        }
+                    }
+                }
+            }
+            
+            // 记工明细
+            if (!uiState.isBatchMode) {
+                item {
+                    val detailTitle = if (uiState.selectedPeriod == "year") "${uiState.selectedYear}年记工明细" else "本月记工明细"
+                    MonthlyDetailCardWithActions(
+                        title = "$detailTitle (${uiState.monthlyDetailRecords.size}条)",
+                        records = uiState.monthlyDetailRecords,
+                        onEdit = { record -> statsViewModel.showEditDialog(record) },
+                        onDelete = { record -> statsViewModel.showDeleteConfirm(record) }
                     )
                 }
-                
-                // 加班分布
+            } else {
+                // 批量选择模式
                 item {
-                    OvertimeDistributionCard(distribution = uiState.overtimeDistribution, totalDays = uiState.totalOvertimeDays, totalHours = uiState.totalOvertimeHours)
+                    Text(text = "选择要删除的记录 (${uiState.selectedRecordIds.size}/${uiState.monthlyDetailRecords.size})", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 }
-                
-                // 年度月度分解柱状图（年视图）
-                if (uiState.selectedPeriod == "year" && uiState.yearMonthlyBreakdown.isNotEmpty()) {
-                    item {
-                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(text = "${uiState.selectedYear}年月度工时", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(16.dp))
-                                AnnualBarChart(data = uiState.yearMonthlyBreakdown, modifier = Modifier.fillMaxWidth().height(220.dp))
-                            }
-                        }
-                    }
+                items(items = uiState.monthlyDetailRecords, key = { it.id }) { record ->
+                    WorkRecordCardBatch(
+                        record = record,
+                        isSelected = uiState.selectedRecordIds.contains(record.id),
+                        onClick = { statsViewModel.toggleRecordSelection(record.id) },
+                        onLongClick = {}
+                    )
                 }
-                
-                // 近6个月趋势图（月视图）
-                if (uiState.selectedPeriod == "month") {
-                    item {
-                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(text = "近6个月工时趋势", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(16.dp))
-                                if (uiState.monthlyTrend.isNotEmpty()) {
-                                    LineChartView(data = uiState.monthlyTrend, modifier = Modifier.fillMaxWidth().height(200.dp))
-                                } else {
-                                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                                        Text(text = "暂无数据", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // 地点分布饼图
-                if (uiState.locationDistribution.isNotEmpty()) {
-                    item {
-                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                val title = if (uiState.selectedPeriod == "year") "${uiState.selectedYear}年地点分布" else "本月地点分布"
-                                Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(16.dp))
-                                PieChartView(data = uiState.locationDistribution, modifier = Modifier.fillMaxWidth().height(200.dp))
-                            }
-                        }
-                    }
-                }
-                
-                // 记工明细
-                if (!uiState.isBatchMode) {
-                    item {
-                        val detailTitle = if (uiState.selectedPeriod == "year") "${uiState.selectedYear}年记工明细" else "本月记工明细"
-                        MonthlyDetailCardWithActions(
-                            title = "$detailTitle (${uiState.monthlyDetailRecords.size}条)",
-                            records = uiState.monthlyDetailRecords,
-                            onEdit = { record -> viewModel.showEditDialog(record) },
-                            onDelete = { record -> viewModel.showDeleteConfirm(record) }
-                        )
-                    }
-                } else {
-                    // 批量选择模式
-                    item {
-                        Text(text = "选择要删除的记录 (${uiState.selectedRecordIds.size}/${uiState.monthlyDetailRecords.size})", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    }
-                    items(items = uiState.monthlyDetailRecords, key = { it.id }) { record ->
-                        WorkRecordCardBatch(
-                            record = record,
-                            isSelected = uiState.selectedRecordIds.contains(record.id),
-                            onClick = { viewModel.toggleRecordSelection(record.id) },
-                            onLongClick = {}
-                        )
-                    }
-                }
-                
-                item { Spacer(modifier = Modifier.height(80.dp)) }
             }
-        }
-        
-        // 编辑对话框
-        if (uiState.showEditDialog && uiState.editingRecord != null) {
-            AddRecordDialog(
-                record = uiState.editingRecord, recentLocations = emptyList(),
-                onDismiss = { viewModel.hideEditDialog() },
-                onSave = { date, hours, isOvertime, location, remark, mealSubsidy, isManual ->
-                    viewModel.saveEditedRecord(date, hours, isOvertime, location, remark, mealSubsidy, isManual)
-                }
-            )
-        }
-        
-        // 删除确认
-        if (uiState.showDeleteConfirm && uiState.deletingRecord != null) {
-            ConfirmDialog(title = "确认删除", message = "确定要删除 ${uiState.deletingRecord!!.date} 的记录吗？删除后可从回收站恢复。",
-                confirmText = "删除", onConfirm = { viewModel.confirmDelete() }, onDismiss = { viewModel.hideDeleteConfirm() }, isDangerous = true)
-        }
-        
-        // 批量删除确认
-        if (uiState.showBatchDeleteConfirm) {
-            ConfirmDialog(title = "批量删除", message = "确定要删除选中的 ${uiState.selectedRecordIds.size} 条记录吗？删除后可从回收站恢复。",
-                confirmText = "删除", onConfirm = { viewModel.confirmBatchDelete() }, onDismiss = { viewModel.hideBatchDeleteConfirm() }, isDangerous = true)
-        }
-        
-        // 工资结算单弹窗
-        if (uiState.showSettlementDialog) {
-            SettlementDialog(
-                settlement = uiState.settlement,
-                allLocations = uiState.allLocations,
-                selectedLocation = uiState.settlementLocation,
-                onLocationChange = { viewModel.updateSettlementLocation(it) },
-                onDismiss = { viewModel.hideSettlementSheet() }
-            )
+            
+            item { Spacer(modifier = Modifier.height(80.dp)) }
         }
     }
 }

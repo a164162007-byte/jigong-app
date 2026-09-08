@@ -84,100 +84,114 @@ fun AdvanceSalaryScreen(
             }
         }
     ) { padding ->
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        StatsCard(
-                            title = "本月预支",
-                            value = currencyFormat.format(uiState.monthlyAmount),
-                            subtitle = "${DateUtils.getMonth()}月累计",
-                            color = AdvanceSalary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatsCard(
-                            title = "累计预支",
-                            value = currencyFormat.format(uiState.totalAmount),
-                            subtitle = "共${uiState.allRecords.size}笔",
-                            color = AdvanceSalary,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
+        AdvanceSalaryContent(viewModel = viewModel, padding = padding)
+    }
+}
 
-                item {
-                    Text(
-                        text = "预支记录",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
+/**
+ * 预支页面的内容部分（不含 Scaffold/TopAppBar/FAB），用于嵌入统计 Tab
+ */
+@Composable
+fun AdvanceSalaryContent(
+    viewModel: AdvanceSalaryViewModel,
+    padding: PaddingValues = PaddingValues(0.dp)
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale.CHINA) }
+
+    if (uiState.isLoading) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    StatsCard(
+                        title = "本月预支",
+                        value = currencyFormat.format(uiState.monthlyAmount),
+                        subtitle = "${DateUtils.getMonth()}月累计",
+                        color = AdvanceSalary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatsCard(
+                        title = "累计预支",
+                        value = currencyFormat.format(uiState.totalAmount),
+                        subtitle = "共${uiState.allRecords.size}笔",
+                        color = AdvanceSalary,
+                        modifier = Modifier.weight(1f)
                     )
                 }
+            }
 
-                if (uiState.allRecords.isEmpty()) {
-                    item {
-                        EmptyState(
-                            message = "暂无预支记录，点击下方按钮添加",
-                            modifier = Modifier.padding(vertical = 32.dp)
-                        )
-                    }
-                } else {
-                    items(
-                        items = uiState.allRecords,
-                        key = { it.id }
-                    ) { record ->
-                        AdvanceRecordCard(
-                            record = record,
-                            onClick = { viewModel.showEditDialog(record) },
-                            onDelete = { viewModel.showDeleteConfirm(record.id) }
-                        )
-                    }
-                }
+            item {
+                Text(
+                    text = "预支记录",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
+            if (uiState.allRecords.isEmpty()) {
                 item {
-                    Spacer(modifier = Modifier.height(80.dp))
+                    EmptyState(
+                        message = "暂无预支记录，点击下方按钮添加",
+                        modifier = Modifier.padding(vertical = 32.dp)
+                    )
+                }
+            } else {
+                items(
+                    items = uiState.allRecords,
+                    key = { it.id }
+                ) { record ->
+                    AdvanceRecordCard(
+                        record = record,
+                        onClick = { viewModel.showEditDialog(record) },
+                        onDelete = { viewModel.showDeleteConfirm(record.id) }
+                    )
                 }
             }
-        }
 
-        if (uiState.showAddDialog) {
-            AddAdvanceSalaryDialog(
-                record = uiState.editingRecord,
-                recentLocations = uiState.recentLocations,
-                onDismiss = { viewModel.hideAddDialog() },
-                onSave = { date, time, location, amount, remark ->
-                    viewModel.saveRecord(date, time, location, amount, remark)
-                }
-            )
+            item {
+                Spacer(modifier = Modifier.height(80.dp))
+            }
         }
+    }
 
-        if (uiState.showDeleteConfirm) {
-            ConfirmDialog(
-                title = "确认删除",
-                message = "确定要删除这条预支记录吗？",
-                confirmText = "删除",
-                onConfirm = { viewModel.confirmDelete() },
-                onDismiss = { viewModel.hideDeleteConfirm() },
-                isDangerous = true
-            )
-        }
+    if (uiState.showAddDialog) {
+        AddAdvanceSalaryDialog(
+            record = uiState.editingRecord,
+            recentLocations = uiState.recentLocations,
+            onDismiss = { viewModel.hideAddDialog() },
+            onSave = { date, time, location, amount, remark ->
+                viewModel.saveRecord(date, time, location, amount, remark)
+            }
+        )
+    }
+
+    if (uiState.showDeleteConfirm) {
+        ConfirmDialog(
+            title = "确认删除",
+            message = "确定要删除这条预支记录吗？",
+            confirmText = "删除",
+            onConfirm = { viewModel.confirmDelete() },
+            onDismiss = { viewModel.hideDeleteConfirm() },
+            isDangerous = true
+        )
     }
 }
 

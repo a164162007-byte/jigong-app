@@ -11,15 +11,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Money
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Money
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -33,10 +29,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.worklogger.app.ui.advance.AdvanceSalaryScreen
 import com.worklogger.app.ui.advance.AdvanceSalaryViewModel
 import com.worklogger.app.ui.advance.AdvanceSalaryViewModelFactory
-import com.worklogger.app.ui.purchase.PurchaseScreen
 import com.worklogger.app.ui.purchase.PurchaseViewModel
 import com.worklogger.app.ui.purchase.PurchaseViewModelFactory
 import com.worklogger.app.ui.calendar.CalendarScreen
@@ -72,8 +66,6 @@ sealed class Screen(
 ) {
     object Home : Screen("home", "记工", Icons.Filled.Home, Icons.Outlined.Home)
     object Stats : Screen("stats", "统计", Icons.Outlined.BarChart, Icons.Outlined.BarChart)
-    object AdvanceSalary : Screen("advance_salary", "预支", Icons.Filled.Money, Icons.Outlined.Money)
-    object Purchase : Screen("purchase", "购买", Icons.Filled.ShoppingCart, Icons.Outlined.ShoppingCart)
     object Calendar : Screen("calendar", "日历", Icons.Filled.DateRange, Icons.Outlined.DateRange)
     object Settings : Screen("settings", "设置", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
@@ -130,7 +122,7 @@ fun MainScreen(app: WorkLoggerApp) {
     val context = LocalContext.current
     val activity = context as? Activity
     val navController = rememberNavController()
-    val screens = listOf(Screen.Home, Screen.Stats, Screen.AdvanceSalary, Screen.Purchase, Screen.Calendar, Screen.Settings)
+    val screens = listOf(Screen.Home, Screen.Stats, Screen.Calendar, Screen.Settings)
     
     // 双击返回退出应用并强制销毁所有进程
     var lastBackPressTime by remember { mutableStateOf(0L) }
@@ -191,24 +183,20 @@ fun MainScreen(app: WorkLoggerApp) {
             }
             
             composable(Screen.Stats.route) {
-                val viewModel = androidx.lifecycle.viewmodel.compose.viewModel<StatsViewModel>(
+                val statsViewModel = androidx.lifecycle.viewmodel.compose.viewModel<StatsViewModel>(
                     factory = StatsViewModelFactory(app.workRepository, app.settingsRepository)
                 )
-                StatsScreen(viewModel = viewModel)
-            }
-            
-            composable(Screen.AdvanceSalary.route) {
-                val viewModel = androidx.lifecycle.viewmodel.compose.viewModel<AdvanceSalaryViewModel>(
+                val advanceSalaryViewModel = androidx.lifecycle.viewmodel.compose.viewModel<AdvanceSalaryViewModel>(
                     factory = AdvanceSalaryViewModelFactory(app.workRepository, app.settingsRepository)
                 )
-                AdvanceSalaryScreen(viewModel = viewModel)
-            }
-            
-            composable(Screen.Purchase.route) {
-                val viewModel = androidx.lifecycle.viewmodel.compose.viewModel<PurchaseViewModel>(
+                val purchaseViewModel = androidx.lifecycle.viewmodel.compose.viewModel<PurchaseViewModel>(
                     factory = PurchaseViewModelFactory(app.workRepository, app.settingsRepository)
                 )
-                PurchaseScreen(viewModel = viewModel)
+                StatsScreen(
+                    statsViewModel = statsViewModel,
+                    advanceSalaryViewModel = advanceSalaryViewModel,
+                    purchaseViewModel = purchaseViewModel
+                )
             }
             
             composable(Screen.Calendar.route) {
