@@ -10,8 +10,10 @@ import com.worklogger.app.model.UserSettings
 import com.worklogger.app.model.WorkRecord
 import com.worklogger.app.utils.DateUtils
 import com.worklogger.app.utils.StatsCalculator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class HomeUiState(
     val currentMonth: String = DateUtils.currentYearMonth(),
@@ -61,6 +63,8 @@ class HomeViewModel(
     private var pendingQuickCheckInHours: Double = 0.0
     private var pendingQuickCheckInOvertimeHours: Double = 0.0
     private var pendingQuickCheckInMealSubsidy: Boolean = false
+    // 防抖Job
+    private var loadDataJob: kotlinx.coroutines.Job? = null
     
     init {
         loadData()
@@ -92,34 +96,37 @@ class HomeViewModel(
         // 使用地点筛选查询
         val records = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, state.selectedLocation)
         
-        // 统计计算只用当月数据，避免多算前月记录
+        // 统计计算只用当月数据
         val monthRecords = records.filter { it.date >= monthStartDate }
         
-        val stats = StatsCalculator.calculateStats(
-            monthRecords,
-            settings.dailyWorkHours,
-            settings.overtimeWorkHours,
-            settings.mealSubsidyStandard,
-            settings.dailyWage
-        )
-        
-        val progress = StatsCalculator.calculateProgress(
-            stats.totalStandard,
-            settings.monthTarget
-        )
-        
-        val totalHours = monthRecords.sumOf { it.hours }
-        val totalWage = stats.wageTotal + stats.mealSubsidyTotal
-        
-        // 漏记检查用完整范围（含前月），确保跨月日期不被误报
-        val missedDays = findMissedDays(records)
-        
-        // 优化：按日期分组取最近7天的完整数据，避免截断破坏分组完整性
-        val recentRecords = if (state.selectedLocation.isNotEmpty()) {
-            records // 地点筛选时显示全部匹配记录
-        } else {
-            val sevenDaysAgo = DateUtils.getDaysAgo(7)
-            records.filter { it.date >= sevenDaysAgo }
+        // CPU密集型计算移到后台线程
+        val (stats, progress, totalHours, totalWage, missedDays, recentRecordsFinal) = withContext(Dispatchers.Default) {
+            val s = StatsCalculator.calculateStats(
+                monthRecords,
+                settings.dailyWorkHours,
+                settings.overtimeWorkHours,
+                settings.mealSubsidyStandard,
+                settings.dailyWage
+            )
+            
+            val p = StatsCalculator.calculateProgress(
+                s.totalStandard,
+                settings.monthTarget
+            )
+            
+            val th = monthRecords.sumOf { it.hours }
+            val tw = s.wageTotal + s.mealSubsidyTotal
+            
+            val md = findMissedDays(records)
+            
+            val rr = if (state.selectedLocation.isNotEmpty()) {
+                records
+            } else {
+                val sevenDaysAgo = DateUtils.getDaysAgo(7)
+                records.filter { it.date >= sevenDaysAgo }
+            }
+            
+            Pair(Pair(s, p), Pair(Pair(th, tw), Pair(md, rr)))
         }
         
         _uiState.update {
@@ -128,7 +135,7 @@ class HomeViewModel(
                 totalStandardDays = stats.totalStandard,
                 totalWage = totalWage,
                 progress = progress,
-                recentRecords = recentRecords,
+                recentRecords = recentRecordsFinal,
                 missedDays = missedDays,
                 isLoading = false
             )
@@ -160,7 +167,8 @@ class HomeViewModel(
                 selectedRecordIds = emptySet()
             ) 
         }
-        viewModelScope.launch {
+        loadDataJob?.cancel()
+        loadDataJob = viewModelScope.launch {
             settingsRepository.settings.first().let { settings ->
                 loadMonthlyData(settings)
             }
@@ -486,7 +494,8 @@ class HomeViewModel(
     
     fun refreshData() {
         _uiState.update { it.copy(isLoading = true) }
-        viewModelScope.launch {
+        loadDataJob?.cancel()
+        loadDataJob = viewModelScope.launch {
             settingsRepository.settings.first().let { settings ->
                 loadMonthlyData(settings)
             }

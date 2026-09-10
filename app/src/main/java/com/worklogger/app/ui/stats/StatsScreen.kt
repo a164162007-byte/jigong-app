@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
@@ -53,7 +54,14 @@ fun StatsScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) { statsViewModel.refresh() }
+            if (event == Lifecycle.Event.ON_RESUME) {
+                // 只刷新当前选中的Tab数据
+                when (selectedTab) {
+                    0 -> statsViewModel.refresh()
+                    1 -> advanceSalaryViewModel.refreshData()
+                    2 -> purchaseViewModel.refreshData()
+                }
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -208,6 +216,10 @@ fun StatsContent(
 ) {
     val uiState by statsViewModel.uiState.collectAsState()
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale.CHINA) }
+    // 屏幕自适应：窄屏（<400dp）单列，宽屏双列
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp
+    val isCompact = screenWidthDp < 400
     
     if (uiState.isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -254,18 +266,35 @@ fun StatsContent(
                 }
             }
             
-            // 统计卡片 2x2
-            item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatsCard(title = "标准工天数", value = String.format("%.2f", uiState.currentStats.standardDays), color = RecordStandard, modifier = Modifier.weight(1f))
-                    StatsCard(title = "手动折算天数", value = String.format("%.2f", uiState.currentStats.manualDays), color = RecordManual, modifier = Modifier.weight(1f))
+            // 统计卡片 2x2（窄屏单列）
+            if (isCompact) {
+                // 窄屏：单列布局
+                item {
+                    StatsCard(title = "标准工天数", value = String.format("%.2f", uiState.currentStats.standardDays), color = RecordStandard, modifier = Modifier.fillMaxWidth())
                 }
-            }
-            
-            item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatsCard(title = "加班总小时", value = String.format("%.2f", uiState.currentStats.overtimeHours), color = RecordOvertime, modifier = Modifier.weight(1f))
-                    StatsCard(title = "加班折算天数", value = String.format("%.2f", uiState.currentStats.overtimeDays), color = RecordOvertime, modifier = Modifier.weight(1f))
+                item {
+                    StatsCard(title = "手动折算天数", value = String.format("%.2f", uiState.currentStats.manualDays), color = RecordManual, modifier = Modifier.fillMaxWidth())
+                }
+                item {
+                    StatsCard(title = "加班总小时", value = String.format("%.2f", uiState.currentStats.overtimeHours), color = RecordOvertime, modifier = Modifier.fillMaxWidth())
+                }
+                item {
+                    StatsCard(title = "加班折算天数", value = String.format("%.2f", uiState.currentStats.overtimeDays), color = RecordOvertime, modifier = Modifier.fillMaxWidth())
+                }
+            } else {
+                // 宽屏：双列布局
+                item {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatsCard(title = "标准工天数", value = String.format("%.2f", uiState.currentStats.standardDays), color = RecordStandard, modifier = Modifier.weight(1f))
+                        StatsCard(title = "手动折算天数", value = String.format("%.2f", uiState.currentStats.manualDays), color = RecordManual, modifier = Modifier.weight(1f))
+                    }
+                }
+                
+                item {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatsCard(title = "加班总小时", value = String.format("%.2f", uiState.currentStats.overtimeHours), color = RecordOvertime, modifier = Modifier.weight(1f))
+                        StatsCard(title = "加班折算天数", value = String.format("%.2f", uiState.currentStats.overtimeDays), color = RecordOvertime, modifier = Modifier.weight(1f))
+                    }
                 }
             }
             
@@ -289,11 +318,20 @@ fun StatsContent(
                 }
             }
             
-            // 饭补和工资
-            item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatsCard(title = "饭补合计", value = currencyFormat.format(uiState.currentStats.mealSubsidyTotal), subtitle = "日标准 ${currencyFormat.format(uiState.settings.mealSubsidyStandard)}", color = Success, modifier = Modifier.weight(1f))
-                    StatsCard(title = "应发工资", value = currencyFormat.format(uiState.currentStats.wageTotal), subtitle = "日标准 ${currencyFormat.format(uiState.currentStats.dailyWage)}", color = Primary, modifier = Modifier.weight(1f))
+            // 饭补和工资（窄屏单列）
+            if (isCompact) {
+                item {
+                    StatsCard(title = "饭补合计", value = currencyFormat.format(uiState.currentStats.mealSubsidyTotal), subtitle = "日标准 ${currencyFormat.format(uiState.settings.mealSubsidyStandard)}", color = Success, modifier = Modifier.fillMaxWidth())
+                }
+                item {
+                    StatsCard(title = "应发工资", value = currencyFormat.format(uiState.currentStats.wageTotal), subtitle = "日标准 ${currencyFormat.format(uiState.currentStats.dailyWage)}", color = Primary, modifier = Modifier.fillMaxWidth())
+                }
+            } else {
+                item {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatsCard(title = "饭补合计", value = currencyFormat.format(uiState.currentStats.mealSubsidyTotal), subtitle = "日标准 ${currencyFormat.format(uiState.settings.mealSubsidyStandard)}", color = Success, modifier = Modifier.weight(1f))
+                        StatsCard(title = "应发工资", value = currencyFormat.format(uiState.currentStats.wageTotal), subtitle = "日标准 ${currencyFormat.format(uiState.currentStats.dailyWage)}", color = Primary, modifier = Modifier.weight(1f))
+                    }
                 }
             }
             

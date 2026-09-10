@@ -16,7 +16,7 @@ import com.worklogger.app.model.WorkRecord
  */
 @Database(
     entities = [WorkRecord::class, QuickPhrase::class, AdvanceSalaryRecord::class, AdvancePurchaseRecord::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -81,6 +81,25 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
         
+        /**
+         * Migration 4 -> 5：添加数据库索引，提升查询性能
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // work_records 表索引
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_work_records_date ON work_records(date)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_work_records_isOvertime ON work_records(isOvertime)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_work_records_isManual ON work_records(isManual)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_work_records_location ON work_records(location)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_work_records_deleted_at ON work_records(deleted_at)")
+                // advance_salary_records 表索引
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_advance_salary_records_date ON advance_salary_records(date)")
+                // advance_purchase_records 表索引
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_advance_purchase_records_date ON advance_purchase_records(date)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_advance_purchase_records_deleted_at ON advance_purchase_records(deleted_at)")
+            }
+        }
+        
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -88,7 +107,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "work_logger_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

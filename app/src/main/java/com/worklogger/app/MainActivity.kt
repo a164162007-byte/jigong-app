@@ -7,6 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -17,6 +19,9 @@ import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -116,22 +121,23 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class, ExperimentalAnimationApi::class)
 @Composable
 fun MainScreen(app: WorkLoggerApp) {
     val context = LocalContext.current
     val activity = context as? Activity
     val navController = rememberNavController()
     val screens = listOf(Screen.Home, Screen.Stats, Screen.Calendar, Screen.Settings)
+    val windowSizeClass = calculateWindowSizeClass(activity = activity!!)
+    val isCompactWidth = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Compact
     
-    // 双击返回退出应用并强制销毁所有进程
+    // 双击返回退出应用（正常finish，不杀进程）
     var lastBackPressTime by remember { mutableStateOf(0L) }
     BackHandler {
         val currentTime = System.currentTimeMillis()
         if (currentTime - lastBackPressTime < 2000) {
-            // 2秒内再次按返回，退出应用并杀死进程
+            // 2秒内再次按返回，正常退出应用
             activity?.finish()
-            android.os.Process.killProcess(android.os.Process.myPid())
         } else {
             lastBackPressTime = currentTime
             Toast.makeText(context, "再按一次退出应用", Toast.LENGTH_SHORT).show()
@@ -173,7 +179,9 @@ fun MainScreen(app: WorkLoggerApp) {
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = { fadeIn(animationSpec = tween(200)) },
+            exitTransition = { fadeOut(animationSpec = tween(150)) }
         ) {
             composable(Screen.Home.route) {
                 val viewModel = androidx.lifecycle.viewmodel.compose.viewModel<HomeViewModel>(

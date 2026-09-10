@@ -11,8 +11,10 @@ import com.worklogger.app.model.UserSettings
 import com.worklogger.app.model.WorkRecord
 import com.worklogger.app.utils.DateUtils
 import com.worklogger.app.utils.StatsCalculator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class StatsUiState(
     val selectedPeriod: String = "month", // month, year
@@ -77,6 +79,9 @@ class StatsViewModel(
         }
     }
     
+    // 加载任务Job，用于取消重复的加载请求（防抖）
+    private var loadStatsJob: kotlinx.coroutines.Job? = null
+    
     private suspend fun loadStatsData() {
         val state = _uiState.value
         val settings = state.settings
@@ -92,52 +97,96 @@ class StatsViewModel(
             }
         }
         
-        // 使用地点筛选
+        // 数据库查询（IO调度器由Room自动处理）
         val records = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, state.selectedLocation)
-        val stats = StatsCalculator.calculateStats(
-            records, settings.dailyWorkHours, settings.overtimeWorkHours,
-            settings.mealSubsidyStandard, settings.dailyWage
-        )
         
-        val overtimeDist = StatsCalculator.calculateOvertimeDistribution(records, settings.overtimeWorkHours)
-        val (totalDays, totalHours) = StatsCalculator.calculateTotalOvertime(records)
-        
-        // 计算上期数据
-        val prevStats: StatsData
+        // 上期数据查询
+        val prevRecords: List<WorkRecord>
         if (state.selectedPeriod == "year") {
             val prevYear = (state.selectedYear.toInt() - 1).toString()
-            val prevRecords = workRepository.getRecordsByDateRangeAndLocation("$prevYear-01-01", "${prevYear.toInt() + 1}-01-01", state.selectedLocation)
-            prevStats = StatsCalculator.calculateStats(prevRecords, settings.dailyWorkHours, settings.overtimeWorkHours, settings.mealSubsidyStandard, settings.dailyWage)
+            prevRecords = workRepository.getRecordsByDateRangeAndLocation("$prevYear-01-01", "${prevYear.toInt() + 1}-01-01", state.selectedLocation)
         } else {
             val prevYearMonth = DateUtils.addMonths(state.selectedYearMonth, -1)
-            val prevRecords = workRepository.getRecordsByDateRangeAndLocation(DateUtils.getYearMonthFirstDay(prevYearMonth), DateUtils.getYearMonthNextFirstDay(prevYearMonth), state.selectedLocation)
-            prevStats = StatsCalculator.calculateStats(prevRecords, settings.dailyWorkHours, settings.overtimeWorkHours, settings.mealSubsidyStandard, settings.dailyWage)
+            prevRecords = workRepository.getRecordsByDateRangeAndLocation(DateUtils.getYearMonthFirstDay(prevYearMonth), DateUtils.getYearMonthNextFirstDay(prevYearMonth), state.selectedLocation)
         }
         
-        val comparison = StatsCalculator.calculateComparison(stats, prevStats)
-        
-        val locationDist = records
-            .filter { !it.isOvertime }
-            .groupBy { it.location.ifEmpty { "未填写" } }
-            .mapValues { it.value.size }
-        
-        val sortedDetailRecords = records.sortedByDescending { it.date }
-        
-        // 计算当前周期预支合计
+        // 预支合计查询
         val allAdvance = workRepository.allAdvanceRecords.first()
         val periodAdvance = allAdvance
             .filter { it.date >= startDate && it.date < endDate }
             .sumOf { it.amount }
         
-        // 优化：用SQL直接查distinct地点，不用全表加载
+        // 地点查询
         val recentLocs = workRepository.getAllLocations()
         
-        // 年度月度分解 - 优化为一次查询全年数据+内存分组
-        val yearBreakdown = if (state.selectedPeriod == "year") {
-            calculateYearMonthlyBreakdownOptimized(state.selectedYear, state.selectedLocation, settings)
+        // 年度月度分解查询
+        val allYearRecords = if (state.selectedPeriod == "year") {
+            workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, state.selectedLocation)
         } else {
             emptyList()
         }
+        
+        // 月趋势查询
+        val trendRecords = if (state.selectedPeriod == "month") {
+            val yearMonths = DateUtils.getLast6MonthsYearMonths()
+            yearMonths.map { ym ->
+                ym to workRepository.getRecordsByDateRangeAndLocation(
+                    DateUtils.getYearMonthFirstDay(ym),
+                    DateUtils.getYearMonthNextFirstDay(ym),
+                    state.selectedLocation
+                )
+            }
+        } else {
+            emptyList()
+        }
+        
+        // ========== CPU密集型计算移到后台线程 ==========
+        val (stats, overtimeDist, totalDays, totalHours, prevStats, comparison, locationDist, yearBreakdown, trend) = withContext(Dispatchers.Default) {
+            val s = StatsCalculator.calculateStats(
+                records, settings.dailyWorkHours, settings.overtimeWorkHours,
+                settings.mealSubsidyStandard, settings.dailyWage
+            )
+            val od = StatsCalculator.calculateOvertimeDistribution(records, settings.overtimeWorkHours)
+            val (td, th) = StatsCalculator.calculateTotalOvertime(records)
+            
+            val ps = StatsCalculator.calculateStats(
+                prevRecords, settings.dailyWorkHours, settings.overtimeWorkHours,
+                settings.mealSubsidyStandard, settings.dailyWage
+            )
+            val comp = StatsCalculator.calculateComparison(s, ps)
+            
+            val ld = records
+                .filter { !it.isOvertime }
+                .groupBy { it.location.ifEmpty { "未填写" } }
+                .mapValues { it.value.size }
+            
+            // 年度月度分解
+            val yb = if (state.selectedPeriod == "year") {
+                val groupedByMonth = allYearRecords.groupBy { it.date.substring(0, 7) }
+                (1..12).map { month ->
+                    val yearMonth = String.format("%s-%02d", state.selectedYear, month)
+                    val monthRecords = groupedByMonth[yearMonth] ?: emptyList()
+                    val ms = StatsCalculator.calculateStats(monthRecords, settings.dailyWorkHours, settings.overtimeWorkHours, settings.mealSubsidyStandard, settings.dailyWage)
+                    yearMonth to ms.totalStandard
+                }
+            } else {
+                emptyList()
+            }
+            
+            // 月趋势
+            val tr = if (state.selectedPeriod == "month") {
+                trendRecords.map { (ym, recs) ->
+                    val ms = StatsCalculator.calculateStats(recs, settings.dailyWorkHours, settings.overtimeWorkHours, settings.mealSubsidyStandard, settings.dailyWage)
+                    ym to ms.totalStandard
+                }
+            } else {
+                emptyList()
+            }
+            
+            Pair(Pair(s, od), Pair(Pair(td, th), Pair(ps, Pair(comp, Pair(ld, Pair(yb, tr))))))
+        }
+        
+        val sortedDetailRecords = records.sortedByDescending { it.date }
         
         _uiState.update {
             it.copy(
@@ -153,70 +202,31 @@ class StatsViewModel(
                 recentLocations = recentLocs,
                 allLocations = recentLocs,
                 yearMonthlyBreakdown = yearBreakdown,
+                monthlyTrend = trend,
                 currentPeriodAdvance = periodAdvance,
                 isLoading = false
             )
         }
-        
-        // 加载近6个月趋势（仅月视图）
-        if (state.selectedPeriod == "month") {
-            loadMonthlyTrend()
-        }
-    }
-    
-    /**
-     * 优化版年度月度分解：一次查询全年数据，在内存中按月分组计算
-     * 避免12次数据库查询
-     */
-    private suspend fun calculateYearMonthlyBreakdownOptimized(year: String, location: String, settings: UserSettings): List<Pair<String, Double>> {
-        val startDate = "$year-01-01"
-        val endDate = "${year.toInt() + 1}-01-01"
-        val allYearRecords = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, location)
-        
-        // 按月分组
-        val groupedByMonth = allYearRecords.groupBy { it.date.substring(0, 7) } // "yyyy-MM"
-        
-        val breakdown = mutableListOf<Pair<String, Double>>()
-        for (month in 1..12) {
-            val yearMonth = String.format("%s-%02d", year, month)
-            val monthRecords = groupedByMonth[yearMonth] ?: emptyList()
-            val stats = StatsCalculator.calculateStats(monthRecords, settings.dailyWorkHours, settings.overtimeWorkHours, settings.mealSubsidyStandard, settings.dailyWage)
-            breakdown.add(yearMonth to stats.totalStandard)
-        }
-        return breakdown
-    }
-    
-    private suspend fun loadMonthlyTrend() {
-        val yearMonths = DateUtils.getLast6MonthsYearMonths()
-        val settings = _uiState.value.settings
-        
-        val trend = mutableListOf<Pair<String, Double>>()
-        for (ym in yearMonths) {
-            val startDate = DateUtils.getYearMonthFirstDay(ym)
-            val endDate = DateUtils.getYearMonthNextFirstDay(ym)
-            val records = workRepository.getRecordsByDateRangeAndLocation(startDate, endDate, _uiState.value.selectedLocation)
-            val stats = StatsCalculator.calculateStats(records, settings.dailyWorkHours, settings.overtimeWorkHours, settings.mealSubsidyStandard, settings.dailyWage)
-            trend.add(ym to stats.totalStandard)
-        }
-        
-        _uiState.update { it.copy(monthlyTrend = trend) }
     }
     
     // ========== 视图模式切换 ==========
     
     fun setViewMode(mode: String) {
         _uiState.update { it.copy(selectedPeriod = mode, isLoading = true) }
-        viewModelScope.launch { loadStatsData() }
+        loadStatsJob?.cancel()
+        loadStatsJob = viewModelScope.launch { loadStatsData() }
     }
     
     fun setSelectedYearMonth(yearMonth: String) {
         _uiState.update { it.copy(selectedYearMonth = yearMonth, isLoading = true) }
-        viewModelScope.launch { loadStatsData() }
+        loadStatsJob?.cancel()
+        loadStatsJob = viewModelScope.launch { loadStatsData() }
     }
     
     fun setSelectedYear(year: String) {
         _uiState.update { it.copy(selectedYear = year, isLoading = true) }
-        viewModelScope.launch { loadStatsData() }
+        loadStatsJob?.cancel()
+        loadStatsJob = viewModelScope.launch { loadStatsData() }
     }
     
     fun previousMonth() {
@@ -254,7 +264,8 @@ class StatsViewModel(
                 selectedRecordIds = emptySet()
             )
         }
-        viewModelScope.launch { loadStatsData() }
+        loadStatsJob?.cancel()
+        loadStatsJob = viewModelScope.launch { loadStatsData() }
     }
     
     // ========== 批量操作 ==========
@@ -305,7 +316,8 @@ class StatsViewModel(
     
     fun refresh() {
         _uiState.update { it.copy(isLoading = true) }
-        viewModelScope.launch { loadStatsData() }
+        loadStatsJob?.cancel()
+        loadStatsJob = viewModelScope.launch { loadStatsData() }
     }
     
     // ========== 编辑功能 ==========

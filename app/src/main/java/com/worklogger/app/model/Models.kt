@@ -2,12 +2,19 @@ package com.worklogger.app.model
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
  * 记工记录实体
  */
-@Entity(tableName = "work_records")
+@Entity(tableName = "work_records", indices = [
+    Index(value = ["date"]),
+    Index(value = ["isOvertime"]),
+    Index(value = ["isManual"]),
+    Index(value = ["location"]),
+    Index(value = ["deleted_at"])
+])
 data class WorkRecord(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
@@ -102,7 +109,9 @@ enum class RecordColorType {
 /**
  * 预支工资记录实体
  */
-@Entity(tableName = "advance_salary_records")
+@Entity(tableName = "advance_salary_records", indices = [
+    Index(value = ["date"])
+])
 data class AdvanceSalaryRecord(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
@@ -117,7 +126,10 @@ data class AdvanceSalaryRecord(
 /**
  * 垫资购买记录实体
  */
-@Entity(tableName = "advance_purchase_records")
+@Entity(tableName = "advance_purchase_records", indices = [
+    Index(value = ["date"]),
+    Index(value = ["deleted_at"])
+])
 data class AdvancePurchaseRecord(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
