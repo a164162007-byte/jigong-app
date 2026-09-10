@@ -100,7 +100,7 @@ class HomeViewModel(
         val monthRecords = records.filter { it.date >= monthStartDate }
         
         // CPU密集型计算移到后台线程
-        val (stats, progress, totalHours, totalWage, missedDays, recentRecordsFinal) = withContext(Dispatchers.Default) {
+        val calcResult = withContext(Dispatchers.Default) {
             val s = StatsCalculator.calculateStats(
                 monthRecords,
                 settings.dailyWorkHours,
@@ -126,8 +126,17 @@ class HomeViewModel(
                 records.filter { it.date >= sevenDaysAgo }
             }
             
-            Pair(Pair(s, p), Pair(Pair(th, tw), Pair(md, rr)))
+            listOf(s, p, th, tw, md, rr)
         }
+        
+        val stats = calcResult[0] as StatsData
+        val progress = calcResult[1] as Float
+        val totalHours = calcResult[2] as Double
+        val totalWage = calcResult[3] as Double
+        @Suppress("UNCHECKED_CAST")
+        val missedDays = calcResult[4] as List<String>
+        @Suppress("UNCHECKED_CAST")
+        val recentRecordsFinal = calcResult[5] as List<WorkRecord>
         
         _uiState.update {
             it.copy(

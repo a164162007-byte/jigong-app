@@ -141,7 +141,7 @@ class StatsViewModel(
         }
         
         // ========== CPU密集型计算移到后台线程 ==========
-        val (stats, overtimeDist, totalDays, totalHours, prevStats, comparison, locationDist, yearBreakdown, trend) = withContext(Dispatchers.Default) {
+        val calcResult = withContext(Dispatchers.Default) {
             val s = StatsCalculator.calculateStats(
                 records, settings.dailyWorkHours, settings.overtimeWorkHours,
                 settings.mealSubsidyStandard, settings.dailyWage
@@ -183,8 +183,23 @@ class StatsViewModel(
                 emptyList()
             }
             
-            Pair(Pair(s, od), Pair(Pair(td, th), Pair(ps, Pair(comp, Pair(ld, Pair(yb, tr))))))
+            listOf(s, od, td, th, ps, comp, ld, yb, tr)
         }
+        
+        val stats = calcResult[0] as StatsData
+        @Suppress("UNCHECKED_CAST")
+        val overtimeDist = calcResult[1] as Map<Double, Int>
+        val totalDays = calcResult[2] as Double
+        val totalHours = calcResult[3] as Double
+        val prevStats = calcResult[4] as StatsData
+        @Suppress("UNCHECKED_CAST")
+        val comparison = calcResult[5] as Triple<Double, Double, Double>
+        @Suppress("UNCHECKED_CAST")
+        val locationDist = calcResult[6] as Map<String, Int>
+        @Suppress("UNCHECKED_CAST")
+        val yearBreakdown = calcResult[7] as List<Pair<String, Double>>
+        @Suppress("UNCHECKED_CAST")
+        val trend = calcResult[8] as List<Pair<String, Double>>
         
         val sortedDetailRecords = records.sortedByDescending { it.date }
         
