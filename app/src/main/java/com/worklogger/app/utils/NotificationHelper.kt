@@ -221,6 +221,31 @@ class NotificationHelper(private val context: Context) {
         pendingIntent?.let { alarmManager.cancel(it) }
     }
     
+    fun showStandardWorkReminder() {
+        if (!hasNotificationPermission()) return
+        
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_REMINDER)
+            .setSmallIcon(android.R.drawable.ic_menu_edit)
+            .setContentTitle(context.getString(R.string.standard_work_notification_title))
+            .setContentText(context.getString(R.string.standard_work_notification_message))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_STANDARD_WORK, notification)
+    }
+    
     /**
      * 设置每天标准工提醒（早上8点）
      */
