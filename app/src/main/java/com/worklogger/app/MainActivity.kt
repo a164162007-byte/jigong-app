@@ -100,6 +100,7 @@ class MainActivity : ComponentActivity() {
                     settings.offWorkReminder
                 )
                 notificationHelper.scheduleMissedDayReminder(settings.missedDayReminder)
+                notificationHelper.scheduleStandardWorkReminder(true)
             }
         }
         

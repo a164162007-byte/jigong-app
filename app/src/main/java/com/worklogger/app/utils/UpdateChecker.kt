@@ -31,8 +31,8 @@ class UpdateChecker {
         // 备用地址：jsDelivr CDN（国内访问更稳定）
         private const val VERSION_JSON_URL_BACKUP = "https://cdn.jsdelivr.net/gh/a164162007-byte/jigong-app@latest/version.json"
         
-        private const val CURRENT_VERSION_NAME = "2.3.9"
-        private const val CURRENT_VERSION_CODE = 2390
+        private const val CURRENT_VERSION_NAME = "2.4.0"
+        private const val CURRENT_VERSION_CODE = 2400
     }
     
     private val client = OkHttpClient.Builder()

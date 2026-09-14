@@ -25,6 +25,7 @@ class NotificationHelper(private val context: Context) {
         const val CHANNEL_ID_REMINDER = "reminder_channel"
         const val NOTIFICATION_ID_OFF_WORK = 1001
         const val NOTIFICATION_ID_MISSED_DAY = 1002
+        const val NOTIFICATION_ID_STANDARD_WORK = 1003
     }
     
     private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -214,6 +215,61 @@ class NotificationHelper(private val context: Context) {
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             NOTIFICATION_ID_MISSED_DAY,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE
+        )
+        pendingIntent?.let { alarmManager.cancel(it) }
+    }
+    
+    /**
+     * 设置每天标准工提醒（早上8点）
+     */
+    fun scheduleStandardWorkReminder(enabled: Boolean) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        
+        cancelStandardWorkReminder()
+        
+        if (!enabled) return
+        
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 8)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            
+            if (timeInMillis <= System.currentTimeMillis()) {
+                add(Calendar.DAY_OF_MONTH, 1)
+            }
+        }
+        
+        val intent = Intent(context, ReminderReceiver::class.java).apply {
+            action = ReminderReceiver.ACTION_STANDARD_WORK
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            NOTIFICATION_ID_STANDARD_WORK,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        
+        try {
+            alarmManager.setRepeating(
+                AlarmManager.RTC_WAKEUP,
+                calendar.timeInMillis,
+                AlarmManager.INTERVAL_DAY,
+                pendingIntent
+            )
+        } catch (e: SecurityException) {
+            // Handle permission not granted
+        }
+    }
+    
+    fun cancelStandardWorkReminder() {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, ReminderReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            NOTIFICATION_ID_STANDARD_WORK,
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE
         )

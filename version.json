@@ -1,6 +1,6 @@
 {
-  "versionName": "2.3.9",
-  "versionCode": 2390,
-  "downloadUrl": "https://github.com/a164162007-byte/jigong-app/releases/download/v2.3.9/app-debug.apk",
-  "releaseNotes": "v2.3.9 全面性能优化：\n- 数据库添加8个索引，查询速度大幅提升\n- 统计计算移至后台线程，界面更流畅\n- 屏幕自适应：窄屏单列/宽屏双列\n- 页面切换fade动画\n- 数据加载防抖，避免重复刷新\n- 修复退出异常问题"
+  "versionName": "2.4.0",
+  "versionCode": 2400,
+  "downloadUrl": "https://github.com/a164162007-byte/jigong-app/releases/download/v2.4.0/app-debug.apk",
+  "releaseNotes": "v2.4.0 记工逻辑优化：\n- 记加班时若当天未记标准工，强制提醒\n- 标准工每天只能记一次，重复记录自动转为加班\n- 新增每天早上标准工记工提醒通知\n- 漏记提醒文案优化"
 }

@@ -84,7 +84,9 @@
     <string name="off_work_notification_title">下班提醒</string>
     <string name="off_work_notification_message">该记工了！</string>
     <string name="missed_day_notification_title">漏记提醒</string>
-    <string name="missed_day_notification_message">今天还没记工哦~</string>
+    <string name="missed_day_notification_message">今天还没有标准工记录哦，别忘了记工~</string>
+    <string name="standard_work_notification_title">记工提醒</string>
+    <string name="standard_work_notification_message">早上好！今天别忘了记标准工哦~</string>
     
     <!-- Widget -->
     <string name="widget_description">点击快速记工</string>

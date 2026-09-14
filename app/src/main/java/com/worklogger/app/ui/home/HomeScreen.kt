@@ -37,6 +37,7 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale.CHINA) }
+    val snackbarHostState = remember { SnackbarHostState() }
     
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -54,7 +55,16 @@ fun HomeScreen(
         uiState.recentRecords.groupBy { it.date }
     }
     
+    // 自动转加班提示
+    LaunchedEffect(uiState.showAutoConvertSnackbar) {
+        if (uiState.showAutoConvertSnackbar) {
+            snackbarHostState.showSnackbar("当天已有标准工，本次记录已自动转为加班")
+            viewModel.dismissAutoConvertSnackbar()
+        }
+    }
+    
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             if (uiState.isBatchMode) {
                 // 批量模式顶栏
@@ -363,6 +373,17 @@ fun HomeScreen(
                 confirmText = "继续添加",
                 onConfirm = { viewModel.confirmDuplicateAnyway() },
                 onDismiss = { viewModel.cancelDuplicateWarning() }
+            )
+        }
+        
+        // 记加班但当天没有标准工的警告
+        if (uiState.showNoStandardWarning) {
+            ConfirmDialog(
+                title = "未记标准工提醒",
+                message = "当天还没有记录标准工，确定要先记加班吗？\n建议先记录标准工（每天仅一次），再记加班。",
+                confirmText = "仍然保存加班",
+                onConfirm = { viewModel.confirmSaveOvertimeNoStandard() },
+                onDismiss = { viewModel.cancelNoStandardWarning() }
             )
         }
     }

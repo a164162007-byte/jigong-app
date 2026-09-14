@@ -49,7 +49,10 @@ data class HomeUiState(
     val pendingSaveLocation: String = "",
     val pendingSaveRemark: String = "",
     val pendingSaveMealSubsidy: Boolean = false,
-    val pendingSaveIsManual: Boolean = false
+    val pendingSaveIsManual: Boolean = false,
+    // 记工逻辑优化
+    val showNoStandardWarning: Boolean = false,
+    val showAutoConvertSnackbar: Boolean = false
 )
 
 class HomeViewModel(
@@ -284,23 +287,51 @@ class HomeViewModel(
             
             val existingRecords = workRepository.getRecordsByDate(date)
             if (existingRecords.isNotEmpty() && _uiState.value.editingRecord == null) {
+                // 检查当天是否有标准工记录
+                val hasStandardRecord = existingRecords.any { !it.isOvertime && !it.isManual && !it.isDeleted }
+                
+                // 记加班但当天没有标准工，强制提醒
+                if (isOvertime && !hasStandardRecord) {
+                    _uiState.update {
+                        it.copy(
+                            showNoStandardWarning = true,
+                            pendingSaveDate = date,
+                            pendingSaveHours = hours,
+                            pendingSaveIsOvertime = isOvertime,
+                            pendingSaveLocation = location,
+                            pendingSaveRemark = remark,
+                            pendingSaveMealSubsidy = mealSubsidy,
+                            pendingSaveIsManual = isManual
+                        )
+                    }
+                    return@launch
+                }
+                
+                // 当天已有标准工，再记非加班非手动记录时自动转为加班
+                val finalIsOvertime = if (!isOvertime && !isManual && hasStandardRecord) {
+                    _uiState.update { it.copy(showAutoConvertSnackbar = true) }
+                    true
+                } else {
+                    isOvertime
+                }
+                
                 _uiState.update { 
                     it.copy(
                         showDuplicateWarning = true, 
                         duplicateDate = date,
                         pendingSaveDate = date,
                         pendingSaveHours = hours,
-                        pendingSaveIsOvertime = isOvertime,
+                        pendingSaveIsOvertime = finalIsOvertime,
                         pendingSaveLocation = location,
                         pendingSaveRemark = remark,
-                        pendingSaveMealSubsidy = mealSubsidy,
+                        pendingSaveMealSubsidy = if (finalIsOvertime) false else mealSubsidy,
                         pendingSaveIsManual = isManual
                     ) 
                 }
                 return@launch
             }
             
-            performSave(date, hours, isOvertime, location, remark, mealSubsidy, isManual)
+            performSave(date, hours, isOvertime, location, remark, mealSubsidy, isManual, existingRecords)
         }
     }
     
@@ -308,10 +339,11 @@ class HomeViewModel(
         val state = _uiState.value
         _uiState.update { it.copy(showHoursWarning = false) }
         viewModelScope.launch {
+            val existingRecords = workRepository.getRecordsByDate(state.pendingSaveDate)
             performSave(
                 state.pendingSaveDate, state.pendingSaveHours, state.pendingSaveIsOvertime,
                 state.pendingSaveLocation, state.pendingSaveRemark, state.pendingSaveMealSubsidy,
-                state.pendingSaveIsManual
+                state.pendingSaveIsManual, existingRecords
             )
         }
     }
@@ -324,10 +356,11 @@ class HomeViewModel(
         val state = _uiState.value
         _uiState.update { it.copy(showDuplicateWarning = false) }
         viewModelScope.launch {
+            val existingRecords = workRepository.getRecordsByDate(state.pendingSaveDate)
             performSave(
                 state.pendingSaveDate, state.pendingSaveHours, state.pendingSaveIsOvertime,
                 state.pendingSaveLocation, state.pendingSaveRemark, state.pendingSaveMealSubsidy,
-                state.pendingSaveIsManual
+                state.pendingSaveIsManual, existingRecords
             )
             
             // 一键记工带加班时，重复确认后也补上加班记录（无饭补）
@@ -348,6 +381,27 @@ class HomeViewModel(
         _uiState.update { it.copy(showDuplicateWarning = false) }
     }
     
+    fun confirmSaveOvertimeNoStandard() {
+        val state = _uiState.value
+        _uiState.update { it.copy(showNoStandardWarning = false) }
+        viewModelScope.launch {
+            val existingRecords = workRepository.getRecordsByDate(state.pendingSaveDate)
+            performSave(
+                state.pendingSaveDate, state.pendingSaveHours, state.pendingSaveIsOvertime,
+                state.pendingSaveLocation, state.pendingSaveRemark, state.pendingSaveMealSubsidy,
+                state.pendingSaveIsManual, existingRecords
+            )
+        }
+    }
+    
+    fun cancelNoStandardWarning() {
+        _uiState.update { it.copy(showNoStandardWarning = false) }
+    }
+    
+    fun dismissAutoConvertSnackbar() {
+        _uiState.update { it.copy(showAutoConvertSnackbar = false) }
+    }
+    
     private suspend fun performSave(
         date: String,
         hours: Double,
@@ -355,13 +409,24 @@ class HomeViewModel(
         location: String,
         remark: String,
         mealSubsidy: Boolean,
-        isManual: Boolean
+        isManual: Boolean,
+        existingRecords: List<WorkRecord> = emptyList()
     ) {
         val editingRecord = _uiState.value.editingRecord
         val settings = settingsRepository.settings.first()
         val dailyWorkHours = settings.dailyWorkHours
         
-        val shouldSplit = !isOvertime && hours > dailyWorkHours
+        // 如果已有标准工记录且当前不是加班/手动记录，自动转为加班
+        var finalIsOvertime = isOvertime
+        if (!isOvertime && !isManual && editingRecord == null) {
+            val hasStandard = existingRecords.any { !it.isOvertime && !it.isManual && !it.isDeleted }
+            if (hasStandard) {
+                finalIsOvertime = true
+                _uiState.update { it.copy(showAutoConvertSnackbar = true) }
+            }
+        }
+        
+        val shouldSplit = !finalIsOvertime && hours > dailyWorkHours
         
         if (editingRecord != null) {
             if (shouldSplit) {
@@ -378,12 +443,12 @@ class HomeViewModel(
                 workRepository.insert(newOvertime)
             } else {
                 val finalMealSubsidy = when {
-                    isOvertime -> false
-                    !isOvertime && !isManual -> true
+                    finalIsOvertime -> false
+                    !finalIsOvertime && !isManual -> true
                     else -> mealSubsidy
                 }
                 val updated = editingRecord.copy(
-                    date = date, hours = hours, isOvertime = isOvertime,
+                    date = date, hours = hours, isOvertime = finalIsOvertime,
                     location = location, remark = remark, mealSubsidy = finalMealSubsidy,
                     isManual = isManual, updatedAt = System.currentTimeMillis()
                 )
@@ -403,12 +468,12 @@ class HomeViewModel(
                 workRepository.insert(overtimeRecord)
             } else {
                 val finalMealSubsidy = when {
-                    isOvertime -> false
-                    !isOvertime && !isManual -> true
+                    finalIsOvertime -> false
+                    !finalIsOvertime && !isManual -> true
                     else -> mealSubsidy
                 }
                 val newRecord = WorkRecord(
-                    date = date, hours = hours, isOvertime = isOvertime,
+                    date = date, hours = hours, isOvertime = finalIsOvertime,
                     location = location, remark = remark, mealSubsidy = finalMealSubsidy,
                     isManual = isManual
                 )
