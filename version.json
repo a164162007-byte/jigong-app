@@ -1,6 +1,6 @@
 {
-  "versionName": "2.4.0",
-  "versionCode": 2400,
-  "downloadUrl": "https://github.com/a164162007-byte/jigong-app/releases/download/v2.4.0/app-debug.apk",
-  "releaseNotes": "v2.4.0 记工逻辑优化：\n- 记加班时若当天未记标准工，强制提醒\n- 标准工每天只能记一次，重复记录自动转为加班\n- 新增每天早上标准工记工提醒通知\n- 漏记提醒文案优化"
+  "versionName": "2.4.1",
+  "versionCode": 2410,
+  "downloadUrl": "https://github.com/a164162007-byte/jigong-app/releases/download/v2.4.1/app-debug.apk",
+  "releaseNotes": "v2.4.1 屏幕适配优化：\n- 修复记加班无标准工时，当天无记录也提醒\n- 新增自适应排版：低端机/百元机字体自动缩小，高端机字体适度放大\n- 各页面（首页/统计/日历/设置/记工弹窗）布局全面适配\n- 修复小屏幕下内容溢出显示不全问题"
 }

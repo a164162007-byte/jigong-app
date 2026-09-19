@@ -32,6 +32,7 @@ import com.worklogger.app.ui.components.AddRecordDialog
 import com.worklogger.app.ui.components.ConfirmDialog
 import com.worklogger.app.ui.theme.*
 import com.worklogger.app.utils.DateUtils
+import com.worklogger.app.utils.LocalResponsiveValues
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,6 +41,7 @@ fun CalendarScreen(
     viewModel: CalendarViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val rv = LocalResponsiveValues.current
     
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -78,7 +80,7 @@ fun CalendarScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(rv.paddingLarge),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {

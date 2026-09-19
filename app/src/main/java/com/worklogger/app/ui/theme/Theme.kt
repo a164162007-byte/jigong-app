@@ -5,11 +5,20 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import com.worklogger.app.utils.LocalResponsiveValues
+import com.worklogger.app.utils.RememberResponsiveValues
+import com.worklogger.app.utils.rememberResponsiveValues
 
 private val LightColorScheme = lightColorScheme(
     primary = Primary,
@@ -66,6 +75,117 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 @Composable
+fun adaptiveTypography(bodyScale: Float = 1f, titleScale: Float = 1f): Typography {
+    return Typography(
+        displayLarge = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Normal,
+            fontSize = (57 * bodyScale).sp,
+            lineHeight = (64 * bodyScale).sp,
+            letterSpacing = (-0.25).sp
+        ),
+        displayMedium = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Normal,
+            fontSize = (45 * bodyScale).sp,
+            lineHeight = (52 * bodyScale).sp,
+            letterSpacing = 0.sp
+        ),
+        displaySmall = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Normal,
+            fontSize = (36 * bodyScale).sp,
+            lineHeight = (44 * bodyScale).sp,
+            letterSpacing = 0.sp
+        ),
+        headlineLarge = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = (32 * titleScale).sp,
+            lineHeight = (40 * titleScale).sp,
+            letterSpacing = 0.sp
+        ),
+        headlineMedium = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = (28 * titleScale).sp,
+            lineHeight = (36 * titleScale).sp,
+            letterSpacing = 0.sp
+        ),
+        headlineSmall = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = (24 * titleScale).sp,
+            lineHeight = (32 * titleScale).sp,
+            letterSpacing = 0.sp
+        ),
+        titleLarge = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = (22 * titleScale).sp,
+            lineHeight = (28 * titleScale).sp,
+            letterSpacing = 0.sp
+        ),
+        titleMedium = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = (16 * titleScale).sp,
+            lineHeight = (24 * titleScale).sp,
+            letterSpacing = (0.15 * titleScale).sp
+        ),
+        titleSmall = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Medium,
+            fontSize = (14 * titleScale).sp,
+            lineHeight = (20 * titleScale).sp,
+            letterSpacing = (0.1 * titleScale).sp
+        ),
+        bodyLarge = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Normal,
+            fontSize = (16 * bodyScale).sp,
+            lineHeight = (24 * bodyScale).sp,
+            letterSpacing = (0.5 * bodyScale).sp
+        ),
+        bodyMedium = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Normal,
+            fontSize = (14 * bodyScale).sp,
+            lineHeight = (20 * bodyScale).sp,
+            letterSpacing = (0.25 * bodyScale).sp
+        ),
+        bodySmall = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Normal,
+            fontSize = (12 * bodyScale).sp,
+            lineHeight = (16 * bodyScale).sp,
+            letterSpacing = (0.4 * bodyScale).sp
+        ),
+        labelLarge = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Medium,
+            fontSize = (14 * bodyScale).sp,
+            lineHeight = (20 * bodyScale).sp,
+            letterSpacing = (0.1 * bodyScale).sp
+        ),
+        labelMedium = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Medium,
+            fontSize = (12 * bodyScale).sp,
+            lineHeight = (16 * bodyScale).sp,
+            letterSpacing = (0.5 * bodyScale).sp
+        ),
+        labelSmall = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Medium,
+            fontSize = (11 * bodyScale).sp,
+            lineHeight = (16 * bodyScale).sp,
+            letterSpacing = (0.5 * bodyScale).sp
+        )
+    )
+}
+
+@Composable
 fun WorkLoggerTheme(
     theme: String = "system",
     dynamicColor: Boolean = true,
@@ -95,9 +215,18 @@ fun WorkLoggerTheme(
         }
     }
     
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
+    // 自适应排版：根据屏幕尺寸计算缩放因子
+    val responsiveValues = rememberResponsiveValues()
+    val adaptiveTypography = adaptiveTypography(
+        bodyScale = responsiveValues.bodyFontScale,
+        titleScale = responsiveValues.titleFontScale
     )
+    
+    CompositionLocalProvider(LocalResponsiveValues provides responsiveValues) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = adaptiveTypography,
+            content = content
+        )
+    }
 }

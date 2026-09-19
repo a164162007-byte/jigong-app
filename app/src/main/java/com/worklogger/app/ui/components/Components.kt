@@ -29,6 +29,7 @@ import com.worklogger.app.model.RecordColorType
 import com.worklogger.app.model.WorkRecord
 import com.worklogger.app.ui.theme.*
 import com.worklogger.app.utils.DateUtils
+import com.worklogger.app.utils.LocalResponsiveValues
 
 /**
  * 记工记录卡片
@@ -40,6 +41,7 @@ fun WorkRecordCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val rv = LocalResponsiveValues.current
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -53,7 +55,7 @@ fun WorkRecordCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(rv.cardPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 类型指示器
@@ -180,6 +182,7 @@ fun WorkRecordCardBatch(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val rv = LocalResponsiveValues.current
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -193,7 +196,7 @@ fun WorkRecordCardBatch(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(rv.cardPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 选择图标
@@ -276,6 +279,7 @@ fun StatsCard(
     color: Color = MaterialTheme.colorScheme.primary,
     modifier: Modifier = Modifier
 ) {
+    val rv = LocalResponsiveValues.current
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
@@ -287,7 +291,7 @@ fun StatsCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(rv.cardPadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -296,17 +300,19 @@ fun StatsCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(rv.spacingSmall))
             
             Text(
                 text = value,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                color = color
+                color = color,
+                maxLines = 1,
+                minLines = 1
             )
             
             if (subtitle != null) {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(rv.spacingSmall))
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.labelSmall,

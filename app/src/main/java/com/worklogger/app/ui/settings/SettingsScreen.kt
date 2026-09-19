@@ -24,6 +24,7 @@ import com.worklogger.app.data.repository.SettingsRepository
 import com.worklogger.app.data.repository.WorkRepository
 import com.worklogger.app.utils.DownloadState
 import com.worklogger.app.utils.ReleaseInfo
+import com.worklogger.app.utils.LocalResponsiveValues
 import com.worklogger.app.model.QuickPhrase
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,6 +56,7 @@ fun SettingsScreen(
     }
     
     val snackbarHostState = remember { SnackbarHostState() }
+    val rv = LocalResponsiveValues.current
     
     // 监听导入/导出结果并显示Snackbar
     LaunchedEffect(uiState.importResult, uiState.exportResult) {
@@ -328,12 +330,13 @@ fun SettingsSection(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val rv = LocalResponsiveValues.current
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+            modifier = Modifier.padding(horizontal = rv.paddingLarge, vertical = rv.spacingLarge)
         )
         content()
     }
@@ -345,10 +348,11 @@ fun SettingsInfoItem(
     title: String,
     subtitle: String
 ) {
+    val rv = LocalResponsiveValues.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = rv.paddingLarge, vertical = rv.spacingLarge),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
@@ -386,12 +390,13 @@ fun SettingsClickableItem(
         danger -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.onSurface
     }
+    val rv = LocalResponsiveValues.current
     
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = rv.paddingLarge, vertical = rv.spacingLarge),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
@@ -432,6 +437,7 @@ fun NumberSettingItem(
     prefix: String = "",
     suffix: String = ""
 ) {
+    val rv = LocalResponsiveValues.current
     var textValue by remember(value) { mutableStateOf(if (value == value.toLong().toDouble()) 
         value.toLong().toString() else value.toString()) }
     var isFocused by remember { mutableStateOf(false) }
@@ -439,7 +445,7 @@ fun NumberSettingItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = rv.paddingLarge, vertical = rv.spacingLarge),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -578,7 +584,7 @@ fun ThemeSettingItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { showMenu = true }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = LocalResponsiveValues.current.paddingLarge, vertical = LocalResponsiveValues.current.spacingLarge),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(

@@ -331,6 +331,23 @@ class HomeViewModel(
                 return@launch
             }
             
+            // 当天没有任何记录时，记加班也要提醒先记标准工
+            if (existingRecords.isEmpty() && isOvertime && !isManual) {
+                _uiState.update {
+                    it.copy(
+                        showNoStandardWarning = true,
+                        pendingSaveDate = date,
+                        pendingSaveHours = hours,
+                        pendingSaveIsOvertime = isOvertime,
+                        pendingSaveLocation = location,
+                        pendingSaveRemark = remark,
+                        pendingSaveMealSubsidy = mealSubsidy,
+                        pendingSaveIsManual = isManual
+                    )
+                }
+                return@launch
+            }
+            
             performSave(date, hours, isOvertime, location, remark, mealSubsidy, isManual, existingRecords)
         }
     }

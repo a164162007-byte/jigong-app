@@ -26,6 +26,7 @@ import com.worklogger.app.model.WorkRecord
 import com.worklogger.app.ui.components.*
 import com.worklogger.app.ui.theme.Primary
 import com.worklogger.app.utils.DateUtils
+import com.worklogger.app.utils.LocalResponsiveValues
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -38,6 +39,7 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale.CHINA) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val rv = LocalResponsiveValues.current
     
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -148,14 +150,14 @@ fun HomeScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                contentPadding = PaddingValues(rv.paddingLarge),
+                verticalArrangement = Arrangement.spacedBy(rv.spacingMedium)
             ) {
                 // 统计卡片
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(rv.spacingMedium)
                     ) {
                         StatsCard(
                             title = "本月工时",
@@ -182,7 +184,7 @@ fun HomeScreen(
                             colors = CardDefaults.cardColors(containerColor = Primary)
                         ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                                modifier = Modifier.fillMaxWidth().padding(rv.paddingLarge),
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -206,7 +208,7 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
+                            Column(modifier = Modifier.padding(rv.paddingLarge)) {
                                 Text(text = "月目标进度", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(12.dp))
                                 ProgressBar(
@@ -225,7 +227,7 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
+                            Column(modifier = Modifier.padding(rv.paddingLarge)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Outlined.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
                                     Spacer(modifier = Modifier.width(8.dp))

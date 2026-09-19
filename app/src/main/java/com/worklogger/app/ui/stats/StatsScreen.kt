@@ -216,6 +216,7 @@ fun StatsContent(
 ) {
     val uiState by statsViewModel.uiState.collectAsState()
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale.CHINA) }
+    val rv = LocalResponsiveValues.current
     // 屏幕自适应：窄屏（<400dp）单列，宽屏双列
     val configuration = LocalConfiguration.current
     val screenWidthDp = configuration.screenWidthDp
@@ -228,8 +229,8 @@ fun StatsContent(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(rv.paddingLarge),
+            verticalArrangement = Arrangement.spacedBy(rv.spacingLarge)
         ) {
             // 月/年视图切换
             if (!uiState.isBatchMode) {
