@@ -17,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import com.worklogger.app.utils.LocalResponsiveValues
-import com.worklogger.app.utils.RememberResponsiveValues
 import com.worklogger.app.utils.rememberResponsiveValues
 
 private val LightColorScheme = lightColorScheme(

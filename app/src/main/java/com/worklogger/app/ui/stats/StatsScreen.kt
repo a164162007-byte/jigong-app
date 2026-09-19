@@ -37,6 +37,7 @@ import com.worklogger.app.ui.purchase.PurchaseContent
 import com.worklogger.app.ui.purchase.PurchaseViewModel
 import com.worklogger.app.ui.theme.*
 import com.worklogger.app.utils.DateUtils
+import com.worklogger.app.utils.LocalResponsiveValues
 import java.text.NumberFormat
 import java.util.Locale
 
