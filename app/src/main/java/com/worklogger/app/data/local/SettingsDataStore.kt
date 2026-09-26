@@ -27,6 +27,7 @@ class SettingsDataStore(private val context: Context) {
         private val MISSED_DAY_REMINDER = booleanPreferencesKey("missed_day_reminder")
         private val THEME = stringPreferencesKey("theme")
         private val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
+        private val FONT_SCALE = floatPreferencesKey("font_scale")
     }
     
     val settings: Flow<UserSettings> = context.dataStore.data.map { preferences ->
@@ -41,7 +42,8 @@ class SettingsDataStore(private val context: Context) {
             offWorkReminder = preferences[OFF_WORK_REMINDER] ?: true,
             missedDayReminder = preferences[MISSED_DAY_REMINDER] ?: true,
             theme = preferences[THEME] ?: "system",
-            biometricEnabled = preferences[BIOMETRIC_ENABLED] ?: false
+            biometricEnabled = preferences[BIOMETRIC_ENABLED] ?: false,
+            fontScale = preferences[FONT_SCALE]
         )
     }
     
@@ -58,6 +60,7 @@ class SettingsDataStore(private val context: Context) {
             preferences[MISSED_DAY_REMINDER] = settings.missedDayReminder
             preferences[THEME] = settings.theme
             preferences[BIOMETRIC_ENABLED] = settings.biometricEnabled
+            settings.fontScale?.let { preferences[FONT_SCALE] = it }
         }
     }
     
@@ -99,6 +102,10 @@ class SettingsDataStore(private val context: Context) {
     
     suspend fun updateTheme(theme: String) {
         context.dataStore.edit { it[THEME] = theme }
+    }
+    
+    suspend fun updateFontScale(scale: Float) {
+        context.dataStore.edit { it[FONT_SCALE] = scale.coerceIn(0.7f, 1.3f) }
     }
     
     suspend fun clearAll() {

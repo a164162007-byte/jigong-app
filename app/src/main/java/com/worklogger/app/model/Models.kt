@@ -59,7 +59,8 @@ data class UserSettings(
     val offWorkReminder: Boolean = true,   // 下班提醒开关
     val missedDayReminder: Boolean = true, // 漏记提醒开关
     val theme: String = "system",         // system/light/dark
-    val biometricEnabled: Boolean = false  // 生物识别开关
+    val biometricEnabled: Boolean = false,  // 生物识别开关
+    val fontScale: Float? = null           // 字体缩放（null=首次运行自动检测，0.7~1.3）
 )
 
 /**

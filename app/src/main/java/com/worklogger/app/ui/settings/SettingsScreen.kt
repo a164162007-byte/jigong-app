@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -136,6 +138,11 @@ fun SettingsScreen(
                 ThemeSettingItem(
                     currentTheme = uiState.settings.theme,
                     onThemeSelected = { viewModel.updateTheme(it) }
+                )
+                
+                FontScaleSettingItem(
+                    fontScale = uiState.settings.fontScale,
+                    onFontScaleChange = { viewModel.updateFontScale(it) }
                 )
             }
             
@@ -321,6 +328,60 @@ fun SettingsScreen(
             ) {
                 CircularProgressIndicator()
             }
+        }
+    }
+}
+
+@Composable
+fun FontScaleSettingItem(
+    fontScale: Float?,
+    onFontScaleChange: (Float) -> Unit
+) {
+    val rv = LocalResponsiveValues.current
+    // 当前值：null=首次自动检测（显示1.0），否则用存储值
+    val currentValue = fontScale ?: 1.0f
+    val label = when {
+        currentValue < 0.85f -> "小字体"
+        currentValue < 0.95f -> "较小"
+        currentValue < 1.05f -> "标准"
+        currentValue < 1.15f -> "较大"
+        else -> "大字体"
+    }
+    
+    Column(modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = rv.paddingLarge, vertical = rv.spacingLarge)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = "字体大小", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = "${label} (${String.format("%.1f", currentValue)}x)",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Slider(
+            value = currentValue,
+            onValueChange = { onFontScaleChange(it) },
+            valueRange = 0.7f..1.3f,
+            steps = 11,
+            modifier = Modifier.fillMaxWidth(),
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary
+            )
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("小", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("标准", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("大", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

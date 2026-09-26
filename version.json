@@ -1,6 +1,6 @@
 {
-  "versionName": "2.4.1",
-  "versionCode": 2410,
-  "downloadUrl": "https://github.com/a164162007-byte/jigong-app/releases/download/v2.4.1/app-debug.apk",
-  "releaseNotes": "v2.4.1 屏幕适配优化：\n- 修复记加班无标准工时，当天无记录也提醒\n- 新增自适应排版：低端机/百元机字体自动缩小，高端机字体适度放大\n- 各页面（首页/统计/日历/设置/记工弹窗）布局全面适配\n- 修复小屏幕下内容溢出显示不全问题"
+  "versionName": "2.4.2",
+  "versionCode": 2420,
+  "downloadUrl": "https://github.com/a164162007-byte/jigong-app/releases/download/v2.4.2/app-debug.apk",
+  "releaseNotes": "v2.4.2 字体大小优化：\n- 新增字体大小滑动调节（设置-外观-字体大小）\n- 首次运行自动检测屏幕分辨率和密度，设置合适的字体缩放\n- 覆盖系统字体缩放设置，解决老手机字体偏大、内容溢出显示不全的问题\n- 支持0.7x~1.3x字体缩放范围"
 }

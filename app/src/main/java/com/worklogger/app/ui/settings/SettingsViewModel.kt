@@ -238,6 +238,12 @@ class SettingsViewModel(
         }
     }
     
+    fun updateFontScale(scale: Float) {
+        viewModelScope.launch {
+            settingsRepository.updateFontScale(scale)
+        }
+    }
+    
     fun showClearConfirm() {
         _uiState.update { it.copy(showClearConfirm = true) }
     }

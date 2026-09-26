@@ -36,5 +36,7 @@ class SettingsRepository(private val settingsDataStore: SettingsDataStore) {
     
     suspend fun updateTheme(theme: String) = settingsDataStore.updateTheme(theme)
     
+    suspend fun updateFontScale(scale: Float) = settingsDataStore.updateFontScale(scale)
+    
     suspend fun clearAllSettings() = settingsDataStore.clearAll()
 }

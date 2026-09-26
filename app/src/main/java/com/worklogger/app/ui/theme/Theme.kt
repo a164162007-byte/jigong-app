@@ -6,16 +6,23 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import com.worklogger.app.data.local.SettingsDataStore
 import com.worklogger.app.utils.LocalResponsiveValues
 import com.worklogger.app.utils.rememberResponsiveValues
 
@@ -221,7 +228,36 @@ fun WorkLoggerTheme(
         titleScale = responsiveValues.titleFontScale
     )
     
-    CompositionLocalProvider(LocalResponsiveValues provides responsiveValues) {
+    // 字体缩放：读取设置 + 首次自动检测 + 覆盖系统字体缩放
+    val context = LocalContext.current
+    val settingsDataStore = remember { SettingsDataStore(context) }
+    var currentFontScale by remember { mutableStateOf<Float?>(null) }
+    
+    LaunchedEffect(Unit) {
+        settingsDataStore.settings.collect { settings ->
+            val scale = settings.fontScale ?: run {
+                // 首次运行自动检测：根据屏幕宽度和密度计算合适的字体缩放
+                val config = context.resources.configuration
+                val widthDp = config.screenWidthDp
+                val dpi = context.resources.displayMetrics.densityDpi
+                // 低分辨率小屏 → 缩小字体；高分辨率大屏 → 正常或略放大
+                val autoScale = ((widthDp / 360f) * (160f / dpi)).coerceIn(0.75f, 1.1f)
+                // 保存自动检测值
+                settingsDataStore.updateFontScale(autoScale)
+                autoScale
+            }
+            currentFontScale = scale
+        }
+    }
+    
+    // 覆盖系统字体缩放，防止老手机系统字体设得太大导致溢出
+    val density = LocalDensity.current
+    val effectiveFontScale = currentFontScale?.coerceIn(0.7f, 1.3f) ?: 1.0f
+    
+    CompositionLocalProvider(
+        LocalResponsiveValues provides responsiveValues,
+        LocalDensity provides Density(density.density, effectiveFontScale)
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = adaptiveTypography,
