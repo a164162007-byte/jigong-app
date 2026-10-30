@@ -38,5 +38,8 @@ class SettingsRepository(private val settingsDataStore: SettingsDataStore) {
     
     suspend fun updateFontScale(scale: Float) = settingsDataStore.updateFontScale(scale)
     
+    suspend fun updateLastSelection(location: String, mealSubsidy: Boolean) =
+        settingsDataStore.updateLastSelection(location, mealSubsidy)
+    
     suspend fun clearAllSettings() = settingsDataStore.clearAll()
 }

@@ -60,7 +60,9 @@ data class UserSettings(
     val missedDayReminder: Boolean = true, // 漏记提醒开关
     val theme: String = "system",         // system/light/dark
     val biometricEnabled: Boolean = false,  // 生物识别开关
-    val fontScale: Float? = null           // 字体缩放（null=首次运行自动检测，0.7~1.3）
+    val fontScale: Float? = null,          // 字体缩放（null=首次运行自动检测，0.7~1.3）
+    val lastLocation: String = "",         // 上一次记工选择的工地
+    val lastMealSubsidy: Boolean = true    // 上一次记工选择的饭补状态
 )
 
 /**

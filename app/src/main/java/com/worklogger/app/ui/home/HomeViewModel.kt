@@ -449,7 +449,7 @@ class HomeViewModel(
             if (shouldSplit) {
                 val updatedStandard = editingRecord.copy(
                     date = date, hours = dailyWorkHours, isOvertime = false,
-                    location = location, remark = remark, mealSubsidy = true,
+                    location = location, remark = remark, mealSubsidy = mealSubsidy,
                     isManual = isManual, updatedAt = System.currentTimeMillis()
                 )
                 val newOvertime = WorkRecord(
@@ -459,11 +459,7 @@ class HomeViewModel(
                 workRepository.update(updatedStandard)
                 workRepository.insert(newOvertime)
             } else {
-                val finalMealSubsidy = when {
-                    finalIsOvertime -> false
-                    !finalIsOvertime && !isManual -> true
-                    else -> mealSubsidy
-                }
+                val finalMealSubsidy = if (finalIsOvertime) false else mealSubsidy
                 val updated = editingRecord.copy(
                     date = date, hours = hours, isOvertime = finalIsOvertime,
                     location = location, remark = remark, mealSubsidy = finalMealSubsidy,
@@ -475,7 +471,7 @@ class HomeViewModel(
             if (shouldSplit) {
                 val standardRecord = WorkRecord(
                     date = date, hours = dailyWorkHours, isOvertime = false,
-                    location = location, remark = remark, mealSubsidy = true, isManual = isManual
+                    location = location, remark = remark, mealSubsidy = mealSubsidy, isManual = isManual
                 )
                 val overtimeRecord = WorkRecord(
                     date = date, hours = hours - dailyWorkHours, isOvertime = true,
@@ -484,11 +480,7 @@ class HomeViewModel(
                 workRepository.insert(standardRecord)
                 workRepository.insert(overtimeRecord)
             } else {
-                val finalMealSubsidy = when {
-                    finalIsOvertime -> false
-                    !finalIsOvertime && !isManual -> true
-                    else -> mealSubsidy
-                }
+                val finalMealSubsidy = if (finalIsOvertime) false else mealSubsidy
                 val newRecord = WorkRecord(
                     date = date, hours = hours, isOvertime = finalIsOvertime,
                     location = location, remark = remark, mealSubsidy = finalMealSubsidy,
@@ -512,7 +504,12 @@ class HomeViewModel(
         }
     }
     
-    fun confirmQuickCheckIn(location: String, date: String = DateUtils.today(), overtimeHours: Double = 0.0) {
+    fun confirmQuickCheckIn(
+        location: String,
+        date: String = DateUtils.today(),
+        overtimeHours: Double = 0.0,
+        mealSubsidy: Boolean = true
+    ) {
         viewModelScope.launch {
             // 保存加班工时到类变量，供重复确认时使用
             pendingQuickCheckInOvertimeHours = overtimeHours
@@ -539,10 +536,10 @@ class HomeViewModel(
             val settings = settingsRepository.settings.first()
             val trimmedLocation = location.trim()
             
-            // 创建标准工记录（有饭补）
+            // 创建标准工记录（饭补按用户本次选择）
             val standardRecord = WorkRecord(
                 date = date, hours = settings.dailyWorkHours, isOvertime = false,
-                location = trimmedLocation, remark = "", mealSubsidy = true, isManual = false
+                location = trimmedLocation, remark = "", mealSubsidy = mealSubsidy, isManual = false
             )
             workRepository.insert(standardRecord)
             

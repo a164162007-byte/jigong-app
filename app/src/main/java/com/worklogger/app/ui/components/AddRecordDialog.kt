@@ -16,13 +16,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.worklogger.app.data.local.SettingsDataStore
 import com.worklogger.app.model.WorkRecord
 import com.worklogger.app.ui.theme.*
 import com.worklogger.app.utils.DateUtils
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -44,6 +48,31 @@ fun AddRecordDialog(
     var isOvertime by remember { mutableStateOf(record?.isOvertime ?: false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showLocationDropdown by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val settingsDataStore = remember { SettingsDataStore(context) }
+    // 记住上一次非加班记录的饭补选择，从加班切回来时恢复
+    var rememberedMealSubsidy by remember { mutableStateOf(record?.mealSubsidy ?: true) }
+    var locationTouched by remember { mutableStateOf(record != null) }
+    var mealSubsidyTouched by remember { mutableStateOf(record != null) }
+
+    // 新增记录时带出上一次选择的工地和饭补
+    LaunchedEffect(record) {
+        val last = settingsDataStore.settings.first()
+        if (record == null) {
+            rememberedMealSubsidy = last.lastMealSubsidy
+            if (!locationTouched && location.isBlank()) {
+                location = last.lastLocation
+            }
+            if (!mealSubsidyTouched) {
+                mealSubsidy = last.lastMealSubsidy
+            }
+        } else if (record.isOvertime) {
+            // 编辑加班记录时，记住的是全局上一次非加班的饭补选择
+            rememberedMealSubsidy = last.lastMealSubsidy
+        }
+    }
     
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = DateUtils.parseDate(selectedDate)?.time ?: System.currentTimeMillis()
@@ -127,9 +156,10 @@ fun AddRecordDialog(
                     FilterChip(
                         selected = !isOvertime && !isManual,
                         onClick = {
+                            // 从加班切回时恢复上一次的饭补选择
+                            if (isOvertime) mealSubsidy = rememberedMealSubsidy
                             isOvertime = false
                             isManual = false
-                            mealSubsidy = true
                         },
                         label = { Text("标准工") },
                         colors = FilterChipDefaults.filterChipColors(
@@ -145,8 +175,8 @@ fun AddRecordDialog(
                                 isManual = false
                                 mealSubsidy = false
                             } else {
-                                // 取消加班时回到标准工，饭补强制为true
-                                mealSubsidy = true
+                                // 取消加班时回到标准工，恢复上一次的饭补选择
+                                mealSubsidy = rememberedMealSubsidy
                             }
                         },
                         label = { Text("加班") },
@@ -158,14 +188,10 @@ fun AddRecordDialog(
                     FilterChip(
                         selected = isManual,
                         onClick = {
+                            // 从加班切回时恢复上一次的饭补选择
+                            if (isOvertime) mealSubsidy = rememberedMealSubsidy
                             isManual = !isManual
-                            if (isManual) {
-                                isOvertime = false
-                                mealSubsidy = true  // 手动折算默认有饭补
-                            } else {
-                                // 取消手动折算时回到标准工，饭补强制为true
-                                mealSubsidy = true
-                            }
+                            isOvertime = false
                         },
                         label = { Text("手动折算") },
                         colors = FilterChipDefaults.filterChipColors(
@@ -203,6 +229,7 @@ fun AddRecordDialog(
                         value = location,
                         onValueChange = {
                             location = it
+                            locationTouched = true
                             locationError = false
                             showLocationDropdown = true
                         },
@@ -230,6 +257,7 @@ fun AddRecordDialog(
                                     text = { Text(loc) },
                                     onClick = {
                                         location = loc
+                                        locationTouched = true
                                         locationError = false
                                         showLocationDropdown = false
                                     }
@@ -254,12 +282,8 @@ fun AddRecordDialog(
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                val mealSubsidyEnabled = !isOvertime && isManual
-                val mealSubsidyText = when {
-                    !isOvertime && !isManual -> "饭补（标准工必含）"
-                    isOvertime -> "饭补（加班无饭补）"
-                    else -> "饭补"
-                }
+                val mealSubsidyEnabled = !isOvertime
+                val mealSubsidyText = if (isOvertime) "饭补（加班无饭补）" else "饭补"
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -273,7 +297,13 @@ fun AddRecordDialog(
                     )
                     Switch(
                         checked = mealSubsidy,
-                        onCheckedChange = { if (mealSubsidyEnabled) mealSubsidy = it },
+                        onCheckedChange = {
+                            if (mealSubsidyEnabled) {
+                                mealSubsidy = it
+                                mealSubsidyTouched = true
+                                rememberedMealSubsidy = it
+                            }
+                        },
                         enabled = mealSubsidyEnabled
                     )
                 }
@@ -294,7 +324,13 @@ fun AddRecordDialog(
                                 return@Button
                             }
                             val hoursValue = hours.toDoubleOrNull() ?: 7.0
-                            onSave(selectedDate, hoursValue, isOvertime, location.trim(), remark, mealSubsidy, isManual)
+                            val finalMealSubsidy = if (isOvertime) false else mealSubsidy
+                            // 记住本次选择；加班不覆盖饭补记忆，只记住工地
+                            val rememberMealSubsidy = if (isOvertime) rememberedMealSubsidy else mealSubsidy
+                            scope.launch {
+                                settingsDataStore.updateLastSelection(location.trim(), rememberMealSubsidy)
+                            }
+                            onSave(selectedDate, hoursValue, isOvertime, location.trim(), remark, finalMealSubsidy, isManual)
                         },
                         modifier = Modifier.weight(1f)
                     ) {
@@ -332,7 +368,7 @@ fun AddRecordDialog(
 fun QuickCheckInDialog(
     recentLocations: List<String> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (location: String, date: String, overtimeHours: Double) -> Unit
+    onConfirm: (location: String, date: String, overtimeHours: Double, mealSubsidy: Boolean) -> Unit
 ) {
     var location by remember { mutableStateOf("") }
     var locationError by remember { mutableStateOf(false) }
@@ -340,6 +376,19 @@ fun QuickCheckInDialog(
     var selectedDate by remember { mutableStateOf(DateUtils.today()) }
     var showDatePicker by remember { mutableStateOf(false) }
     var overtimeHours by remember { mutableStateOf("") }
+    var mealSubsidy by remember { mutableStateOf(true) }
+    var locationTouched by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val settingsDataStore = remember { SettingsDataStore(context) }
+
+    // 带出上一次选择的工地和饭补
+    LaunchedEffect(Unit) {
+        val last = settingsDataStore.settings.first()
+        if (!locationTouched && location.isBlank()) location = last.lastLocation
+        mealSubsidy = last.lastMealSubsidy
+    }
     
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = DateUtils.parseDate(selectedDate)?.time ?: System.currentTimeMillis()
@@ -400,6 +449,7 @@ fun QuickCheckInDialog(
                         value = location,
                         onValueChange = {
                             location = it
+                            locationTouched = true
                             locationError = false
                             showLocationDropdown = true
                         },
@@ -427,6 +477,7 @@ fun QuickCheckInDialog(
                                     text = { Text(loc) },
                                     onClick = {
                                         location = loc
+                                        locationTouched = true
                                         showLocationDropdown = false
                                     }
                                 )
@@ -458,6 +509,24 @@ fun QuickCheckInDialog(
                     )
                 }
                 
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "标准工饭补",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = mealSubsidy,
+                        onCheckedChange = { mealSubsidy = it }
+                    )
+                }
+                
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Row(
@@ -473,7 +542,10 @@ fun QuickCheckInDialog(
                                 locationError = true
                                 return@Button
                             }
-                            onConfirm(location.trim(), selectedDate, overtimeValue)
+                            scope.launch {
+                                settingsDataStore.updateLastSelection(location.trim(), mealSubsidy)
+                            }
+                            onConfirm(location.trim(), selectedDate, overtimeValue, mealSubsidy)
                         },
                         modifier = Modifier.weight(1f)
                     ) {

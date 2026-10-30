@@ -1,6 +1,6 @@
 {
-  "versionName": "2.4.2",
-  "versionCode": 2420,
-  "downloadUrl": "https://github.com/a164162007-byte/jigong-app/releases/download/v2.4.2/app-debug.apk",
-  "releaseNotes": "v2.4.2 字体大小优化：\n- 新增字体大小滑动调节（设置-外观-字体大小）\n- 首次运行自动检测屏幕分辨率和密度，设置合适的字体缩放\n- 覆盖系统字体缩放设置，解决老手机字体偏大、内容溢出显示不全的问题\n- 支持0.7x~1.3x字体缩放范围"
+  "versionName": "2.4.3",
+  "versionCode": 2430,
+  "downloadUrl": "https://github.com/a164162007-byte/jigong-app/releases/download/v2.4.3/app-debug.apk",
+  "releaseNotes": "v2.4.3 饭补自由设置：\n- 标准工、手动折算的饭补可自由开关，适合工地管饭的情况\n- 加班保持无饭补\n- 自动记住上一次选择的工地和饭补状态，下次记工直接带出\n- 一键记工同步支持饭补选择和记忆\n- 导入导出同步适配饭补设置"
 }

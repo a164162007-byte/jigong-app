@@ -353,12 +353,12 @@ class StatsViewModel(
             val shouldSplit = !isOvertime && hours > dailyWorkHours
             
             if (shouldSplit) {
-                val updatedStandard = record.copy(date = date, hours = dailyWorkHours, isOvertime = false, location = location, remark = remark, mealSubsidy = true, isManual = isManual, updatedAt = System.currentTimeMillis())
+                val updatedStandard = record.copy(date = date, hours = dailyWorkHours, isOvertime = false, location = location, remark = remark, mealSubsidy = mealSubsidy, isManual = isManual, updatedAt = System.currentTimeMillis())
                 val newOvertime = WorkRecord(date = date, hours = hours - dailyWorkHours, isOvertime = true, location = location, remark = "", mealSubsidy = false, isManual = false)
                 workRepository.update(updatedStandard)
                 workRepository.insert(newOvertime)
             } else {
-                val finalMealSubsidy = when { isOvertime -> false; !isOvertime && !isManual -> true; else -> mealSubsidy }
+                val finalMealSubsidy = if (isOvertime) false else mealSubsidy
                 val updatedRecord = record.copy(date = date, hours = hours, isOvertime = isOvertime, location = location, remark = remark, mealSubsidy = finalMealSubsidy, isManual = isManual, updatedAt = System.currentTimeMillis())
                 workRepository.update(updatedRecord)
             }

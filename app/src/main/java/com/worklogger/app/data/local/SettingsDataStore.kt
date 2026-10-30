@@ -28,6 +28,8 @@ class SettingsDataStore(private val context: Context) {
         private val THEME = stringPreferencesKey("theme")
         private val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
         private val FONT_SCALE = floatPreferencesKey("font_scale")
+        private val LAST_LOCATION = stringPreferencesKey("last_location")
+        private val LAST_MEAL_SUBSIDY = booleanPreferencesKey("last_meal_subsidy")
     }
     
     val settings: Flow<UserSettings> = context.dataStore.data.map { preferences ->
@@ -43,7 +45,9 @@ class SettingsDataStore(private val context: Context) {
             missedDayReminder = preferences[MISSED_DAY_REMINDER] ?: true,
             theme = preferences[THEME] ?: "system",
             biometricEnabled = preferences[BIOMETRIC_ENABLED] ?: false,
-            fontScale = preferences[FONT_SCALE]
+            fontScale = preferences[FONT_SCALE],
+            lastLocation = preferences[LAST_LOCATION] ?: "",
+            lastMealSubsidy = preferences[LAST_MEAL_SUBSIDY] ?: true
         )
     }
     
@@ -61,6 +65,8 @@ class SettingsDataStore(private val context: Context) {
             preferences[THEME] = settings.theme
             preferences[BIOMETRIC_ENABLED] = settings.biometricEnabled
             settings.fontScale?.let { preferences[FONT_SCALE] = it }
+            preferences[LAST_LOCATION] = settings.lastLocation
+            preferences[LAST_MEAL_SUBSIDY] = settings.lastMealSubsidy
         }
     }
     
@@ -106,6 +112,17 @@ class SettingsDataStore(private val context: Context) {
     
     suspend fun updateFontScale(scale: Float) {
         context.dataStore.edit { it[FONT_SCALE] = scale.coerceIn(0.7f, 1.3f) }
+    }
+
+    /**
+     * 记住上一次记工选择的工地和饭补状态
+     * 工地为空时不覆盖已有记忆，避免编辑旧记录时清空
+     */
+    suspend fun updateLastSelection(location: String, mealSubsidy: Boolean) {
+        context.dataStore.edit { preferences ->
+            if (location.isNotBlank()) preferences[LAST_LOCATION] = location
+            preferences[LAST_MEAL_SUBSIDY] = mealSubsidy
+        }
     }
     
     suspend fun clearAll() {

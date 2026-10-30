@@ -126,7 +126,7 @@ class CalendarViewModel(
                     isOvertime = false,
                     location = location,
                     remark = remark,
-                    mealSubsidy = true,  // 标准工必有饭补
+                    mealSubsidy = mealSubsidy,  // 饭补按用户本次选择
                     isManual = isManual,
                     updatedAt = System.currentTimeMillis()
                 )
@@ -143,12 +143,8 @@ class CalendarViewModel(
                 workRepository.update(updatedStandard)
                 workRepository.insert(newOvertime)
             } else {
-                // 业务规则：标准工强制mealSubsidy=true，加班强制mealSubsidy=false，手动折算可自由选择
-                val finalMealSubsidy = when {
-                    isOvertime -> false
-                    !isOvertime && !isManual -> true
-                    else -> mealSubsidy
-                }
+                // 业务规则：加班强制无饭补，标准工/手动折算按用户选择
+                val finalMealSubsidy = if (isOvertime) false else mealSubsidy
                 val updatedRecord = record.copy(
                     date = date, hours = hours, isOvertime = isOvertime,
                     location = location, remark = remark, mealSubsidy = finalMealSubsidy,

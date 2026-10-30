@@ -137,17 +137,15 @@ class ExcelExporter(private val context: Context) {
                         val typeStr = row.getCell(2)?.stringCellValue ?: "标准工"
                         val location = row.getCell(3)?.stringCellValue ?: ""
                         val remark = row.getCell(4)?.stringCellValue ?: ""
-                        val rawMealSubsidy = row.getCell(5)?.stringCellValue == "是"
+                        val mealCell = row.getCell(5)?.stringCellValue?.trim().orEmpty()
+                        // 饭补列缺失时默认有饭补，避免旧表格导入后饭补全部丢失
+                        val rawMealSubsidy = if (mealCell.isBlank()) true else mealCell == "是"
                         
                         val isOvertime = typeStr.contains("加班")
                         val isManual = typeStr.contains("手动")
                         
-                        // 业务规则强制执行：加班没有饭补，标准工必须有饭补，手动折算自由选择
-                        val mealSubsidy = when {
-                            isOvertime -> false
-                            !isOvertime && !isManual -> true
-                            else -> rawMealSubsidy
-                        }
+                        // 业务规则：加班没有饭补，标准工/手动折算按表格中的饭补字段
+                        val mealSubsidy = if (isOvertime) false else rawMealSubsidy
                         
                         records.add(
                             WorkRecord(
